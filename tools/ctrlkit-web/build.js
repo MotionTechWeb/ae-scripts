@@ -30,7 +30,9 @@ var out = path.join(here, "ctrlkit.html");
 var html = render();
 if (process.argv.indexOf("--check") >= 0) {
   var current = fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";
-  if (current !== html) {
+  // Windows で改行が CRLF で取り出されていても最新とみなす
+  var lf = function (t) { return t.replace(/\r\n/g, "\n"); };
+  if (lf(current) !== lf(html)) {
     console.error("ctrlkit.html が古いです。node tools/ctrlkit-web/build.js を実行してください。");
     process.exit(1);
   }
