@@ -500,7 +500,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   // --- 線で描くアイコン（AE の画像は使わず自前で描く） ---
   var ICON_COLOR = [0.75, 0.75, 0.75, 1];
 
-  // ストップウォッチ（キーフレームを打てる項目の目印）
+  // ストップウォッチ（停止キーフレームがオンの項目の目印）
   function addStopwatch(parent) {
     var g = parent.add("group");
     g.preferredSize = [14, 14];
@@ -543,9 +543,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return g;
   }
 
-  var KEYFRAMABLE = { slider: 1, angle: 1, checkbox: 1, color: 1, point: 1, point3d: 1, popup: 1 };
-
-  function previewRow(depth, name, hidden, type) {
+  function previewRow(depth, name, hidden, showStopwatch) {
     var row = previewBody.add("group");
     row.alignChildren = ["left", "center"];
     row.spacing = 4;
@@ -553,7 +551,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
       var indent = row.add("group");
       indent.preferredSize = [depth * 14, 1];
     }
-    if (KEYFRAMABLE[type]) {
+    if (showStopwatch) {
       addStopwatch(row);
     } else {
       var blank = row.add("group");
@@ -590,7 +588,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         depth = Math.max(0, depth - 1);
         continue;
       }
-      var row = previewRow(depth, (p.type === "group" ? "▼ " : "") + p.name, p.invisible, p.type);
+      var row = previewRow(depth, (p.type === "group" ? "▼ " : "") + p.name, p.invisible, HOLDABLE[p.type] && p.hold);
       addPreviewWidget(row, p, i);
       selectOnClick(row, i);
       if (p.type === "group") depth++;
