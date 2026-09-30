@@ -90,6 +90,12 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return m.substring(0, MATCHNAME_MAX);
   }
 
+  // 疑似エフェクトの内部名は「Pseudo/」で始まらないと、AE が本物のエフェクトを探しに行ってしまう
+  function normalizeMatchName(m) {
+    if (!m) return "";
+    return /^Pseudo\//.test(m) ? m : "Pseudo/" + m;
+  }
+
   function isAscii(s) {
     return /^[\x20-\x7e]*$/.test(s);
   }
@@ -133,7 +139,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   function currentDefinition() {
     return {
       name: state.name,
-      matchName: state.matchName || defaultMatchName(state.name),
+      matchName: normalizeMatchName(state.matchName) || defaultMatchName(state.name),
       params: nest(state.items)
     };
   }
@@ -345,7 +351,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   rowMatch.add("statictext", undefined, "内部名");
   var etMatch = rowMatch.add("edittext", undefined, "");
   etMatch.characters = 20;
-  etMatch.helpTip = "空欄なら「" + MATCHNAME_PREFIX + "名前」になります。ほかの疑似エフェクトと重ならない名前にしてください。";
+  etMatch.helpTip = "空欄なら「" + MATCHNAME_PREFIX + "名前」になります。先頭に「Pseudo/」が無ければ自動で付けます。ほかの疑似エフェクトと重ならない名前にしてください。";
 
   var listPanel = right.add("panel", undefined, "項目");
   listPanel.alignChildren = ["fill", "top"];
