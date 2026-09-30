@@ -1,0 +1,244 @@
+/*
+ * MotionKit がレイヤーに書き込むエクスプレッションを組み立てる。
+ * エクスプレッションは AE の JavaScript エンジン向け（配列の足し算は add() を使う）。
+ *
+ * 位置と回転は「配置」と「アニメ」の両方が使うため、どちらのツールから書き込んでも
+ * 同じ関数で両方の分を含んだエクスプレッションを作る。
+ * 配置の情報は 1 行目の目印コメント（// @mk-layout ...）に残し、書き直すときに読み戻す。
+ */
+var MK_Expr = (function () {
+  var SHAPE = "MK Shape";
+  var ANIM = "MK Anim";
+  var LAYOUT = "MK Layout";
+
+  function q(s) {
+    return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  }
+
+  function lines(a) {
+    return a.join("\n");
+  }
+
+  // ---------------------------------------------------------------------
+  // シェイプ（エフェクト「MK Shape」の値を読むだけ）
+  // ---------------------------------------------------------------------
+  function fx(name) {
+    return "effect(" + q(SHAPE) + ")(" + q(name) + ").value";
+  }
+
+  var shape = {
+    size: "[" + fx("Width") + ", " + fx("Height") + "];",
+    roundness: fx("Roundness") + ";",
+    points: fx("Points") + ";",
+    outerRadius: fx("Width") + " / 2;",
+    innerRadius: fx("Width") + " / 2 * " + fx("Inner Radius %") + " / 100;",
+    fillColor: fx("Fill Color") + ";",
+    fillOpacity: fx("Fill") + " ? 100 : 0;",
+    strokeColor: fx("Stroke Color") + ";",
+    strokeOpacity: fx("Stroke") + " ? 100 : 0;",
+    strokeWidth: fx("Stroke Width") + ";",
+    trimStart: fx("Trim Start") + ";",
+    trimEnd: fx("Trim End") + ";",
+    trimOffset: fx("Trim Offset") + ";",
+    line: lines([
+      "var w = " + fx("Width") + " / 2;",
+      "createPath([[-w, 0], [w, 0]], [], [], false);"
+    ]),
+    arrowHead: lines([
+      "var w = " + fx("Width") + " / 2;",
+      "var h = " + fx("Head Size") + ";",
+      "createPath([[w - h, -h * 0.8], [w, 0], [w - h, h * 0.8]], [], [], false);"
+    ])
+  };
+
+  // ---------------------------------------------------------------------
+  // アニメ（エフェクト「MK Anim」）
+  // mkAnim() は進み具合 p（イージング後。オーバーシュートで 1 を超える）と
+  // lin（直線の 0〜1）を返す。エフェクトが無ければ null。
+  // ---------------------------------------------------------------------
+  var ANIM_FN = lines([
+    "function mkAnim() {",
+    "  var fx;",
+    "  try { fx = effect(" + q(ANIM) + "); } catch (e) { return null; }",
+    "  var k = fx(\"Overshoot\").value / 100 * 3;",
+    "  var ez = fx(\"Easing\").value;",
+    "  function f(t) {",
+    "    if (t <= 0) return 0;",
+    "    if (t >= 1) return 1;",
+    "    if (ez == 1) return 1 - Math.pow(1 - t, 3);",
+    "    if (ez == 2) return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;",
+    "    if (ez == 3) return 1 + (k + 1) * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2);",
+    "    if (ez == 4) return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;",
+    "    if (ez == 5) {",
+    "      var n = 7.5625, d = 2.75;",
+    "      if (t < 1 / d) return n * t * t;",
+    "      if (t < 2 / d) { t -= 1.5 / d; return n * t * t + 0.75; }",
+    "      if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + 0.9375; }",
+    "      t -= 2.625 / d; return n * t * t + 0.984375;",
+    "    }",
+    "    return t;",
+    "  }",
+    "  var dur = Math.max(fx(\"Duration\").value, 0.001);",
+    "  var t = (time - (inPoint + fx(\"Start\").value + fx(\"Delay\").value)) / dur;",
+    "  t = Math.min(Math.max(t, 0), 1);",
+    "  var p = f(t), lin = t;",
+    "  if (fx(\"Out\").value) {",
+    "    var u = (outPoint - time) / Math.max(fx(\"Out Duration\").value, 0.001);",
+    "    u = Math.min(Math.max(u, 0), 1);",
+    "    if (u < 1) { p = Math.min(p, f(u)); lin = Math.min(lin, u); }",
+    "  }",
+    "  return { fx: fx, type: fx(\"Type\").value, p: p, lin: lin };",
+    "}"
+  ]);
+
+  var TYPE = { pop: 1, fade: 2, slide: 3, rotate: 4, wipe: 5 };
+
+  function animScale() {
+    return lines([
+      "// MotionKit",
+      ANIM_FN,
+      "var a = mkAnim();",
+      "var s = a && a.type == " + TYPE.pop + " ? a.p : 1;",
+      "var out = [];",
+      "for (var i = 0; i < value.length; i++) out.push(value[i] * s);",
+      "out;"
+    ]);
+  }
+
+  function animOpacity() {
+    return lines([
+      "// MotionKit",
+      ANIM_FN,
+      "var a = mkAnim();",
+      "var o = 1;",
+      "if (a) {",
+      "  if (a.type == " + TYPE.fade + ") o = Math.min(Math.max(a.p, 0), 1);",
+      "  else if (a.fx(\"Fade\").value) o = a.lin;",
+      "}",
+      "value * o;"
+    ]);
+  }
+
+  function animTrimEnd() {
+    return lines([
+      "// MotionKit",
+      ANIM_FN,
+      "var a = mkAnim();",
+      "a && a.type == " + TYPE.wipe + " ? Math.min(Math.max(a.p * 100, 0), 100) : 100;"
+    ]);
+  }
+
+  // ---------------------------------------------------------------------
+  // 配置（ヌル「MK Layout」のエフェクト）
+  // 子レイヤーは配置用ヌルを親にするので、位置はヌルのアンカーポイントからのずれで表す
+  // ---------------------------------------------------------------------
+  var LAYOUT_FN = lines([
+    "function mkLayout(ctrl, i, n) {",
+    "  var L = thisComp.layer(ctrl);",
+    "  var fx = L.effect(" + q(LAYOUT) + ");",
+    "  var m = fx(\"Mode\").value;",
+    "  var sx = fx(\"Spacing X\").value, sy = fx(\"Spacing Y\").value;",
+    "  var x = 0, y = 0, r = 0;",
+    "  if (m == 1) {",
+    "    var c = Math.max(1, Math.round(fx(\"Columns\").value));",
+    "    var rows = Math.ceil(n / c);",
+    "    x = (i % c - (c - 1) / 2) * sx;",
+    "    y = (Math.floor(i / c) - (rows - 1) / 2) * sy;",
+    "  } else if (m == 2) {",
+    "    var arc = fx(\"Arc\").value;",
+    "    var step = Math.abs(arc) >= 360 ? arc / n : (n > 1 ? arc / (n - 1) : 0);",
+    "    var deg = fx(\"Start Angle\").value + step * i;",
+    "    var rad = deg * Math.PI / 180;",
+    "    x = Math.cos(rad) * fx(\"Radius\").value;",
+    "    y = Math.sin(rad) * fx(\"Radius\").value;",
+    "    if (fx(\"Align Rotation\").value) r = deg + 90;",
+    "  } else if (m == 3) {",
+    "    x = (i - (n - 1) / 2) * sx;",
+    "    y = (i - (n - 1) / 2) * sy;",
+    "  } else {",
+    "    seedRandom(fx(\"Seed\").value * 1000 + i, true);",
+    "    x = random(-0.5, 0.5) * fx(\"Scatter Width\").value;",
+    "    y = random(-0.5, 0.5) * fx(\"Scatter Height\").value;",
+    "    r = random(-1, 1) * fx(\"Random Rotation\").value;",
+    "  }",
+    "  var ap = L.transform.anchorPoint.value;",
+    "  return { x: ap[0] + x, y: ap[1] + y, r: r };",
+    "}"
+  ]);
+
+  // info: { ctrl: 配置用ヌルの名前, i: 何番目か（0〜）, n: 全部で何個か } または null
+  function marker(info) {
+    return "// @mk-layout i=" + info.i + " n=" + info.n + " ctrl=" + info.ctrl;
+  }
+
+  function parseLayout(expr) {
+    var m = /\/\/ @mk-layout i=(\d+) n=(\d+) ctrl=(.*)/.exec(expr || "");
+    if (!m) return null;
+    return { i: parseInt(m[1], 10), n: parseInt(m[2], 10), ctrl: m[3].replace(/\s+$/, "") };
+  }
+
+  function layoutCall(info) {
+    return "var lo = mkLayout(" + q(info.ctrl) + ", " + info.i + ", " + info.n + ");";
+  }
+
+  function position(info) {
+    var a = [info ? marker(info) : "// MotionKit"];
+    if (info) a.push(LAYOUT_FN);
+    a.push(ANIM_FN);
+    a.push("var p = value.slice(0);");
+    if (info) {
+      a.push(layoutCall(info));
+      a.push("p[0] = lo.x;");
+      a.push("p[1] = lo.y;");
+    }
+    a.push(
+      "var a = mkAnim();",
+      "if (a && a.type == " + TYPE.slide + ") {",
+      "  var d = a.fx(\"Distance\").value * (1 - a.p);",
+      "  var dir = a.fx(\"Direction\").value;",
+      "  if (dir == 1) p[0] -= d;",
+      "  else if (dir == 2) p[0] += d;",
+      "  else if (dir == 3) p[1] -= d;",
+      "  else p[1] += d;",
+      "}",
+      "p;"
+    );
+    return lines(a);
+  }
+
+  function rotation(info) {
+    var a = [info ? marker(info) : "// MotionKit"];
+    if (info) a.push(LAYOUT_FN);
+    a.push(ANIM_FN);
+    a.push("var r = value;");
+    if (info) {
+      a.push(layoutCall(info));
+      a.push("r += lo.r;");
+    }
+    a.push(
+      "var a = mkAnim();",
+      "if (a && a.type == " + TYPE.rotate + ") r += a.fx(\"Rotation\").value * (1 - a.p);",
+      "r;"
+    );
+    return lines(a);
+  }
+
+  // MotionKit が書いたエクスプレッションかどうか
+  function isOurs(expr) {
+    return /^\/\/ (MotionKit|@mk-layout)/.test(expr || "");
+  }
+
+  return {
+    SHAPE: SHAPE,
+    ANIM: ANIM,
+    LAYOUT: LAYOUT,
+    shape: shape,
+    animScale: animScale,
+    animOpacity: animOpacity,
+    animTrimEnd: animTrimEnd,
+    position: position,
+    rotation: rotation,
+    parseLayout: parseLayout,
+    isOurs: isOurs
+  };
+})();

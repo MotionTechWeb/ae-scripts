@@ -8,6 +8,7 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 | スクリプト | 場所 | 概要 |
 | --- | --- | --- |
 | Zabuton | `packages/zabuton/` | テキストの背景に、文字サイズにぴったり合う「座布団」（角丸の長方形シェイプ）を自動で敷く |
+| MotionKit | `packages/motionkit/` | シェイプ作成・登場アニメ・整列をまとめたパネル。値はエフェクトコントロールで後から調整できる（[詳細](packages/motionkit/README.md)） |
 | CtrlKit | `packages/ctrlkit/` | AE上で疑似エフェクトを組み立て、`.ffx` とスクリプト埋め込み用コードを書き出すパネル（[詳細](packages/ctrlkit/README.md)） |
 | CtrlKit Web | `tools/ctrlkit-web/` | CtrlKit と同じことをブラウザでできる版。[ブラウザで開く](https://motiontechweb.github.io/ae-scripts/tools/ctrlkit-web/ctrlkit.html)だけで使える（[詳細](tools/ctrlkit-web/README.md)） |
 
@@ -61,9 +62,15 @@ ae-scripts/
    │  ├─ zabuton.jsx
    │  ├─ zabuton.ck.json
    │  └─ effectControl_zabuton.ffx
-   └─ ctrlkit/
-      ├─ ctrlkit.jsx
-      ├─ src/
+   ├─ ctrlkit/
+   │  ├─ ctrlkit.jsx
+   │  ├─ src/
+   │  └─ test/
+   └─ motionkit/
+      ├─ motionkit.jsx   # パネル本体（配布はこれ1つ）
+      ├─ effects/        # 疑似エフェクトの設定（.ck.json）
+      ├─ src/            # エクスプレッション
+      ├─ tools/build.js  # 疑似エフェクトとエクスプレッションを motionkit.jsx に埋め込む
       └─ test/
 tools/
 └─ ctrlkit-web/

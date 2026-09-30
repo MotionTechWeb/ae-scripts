@@ -1,0 +1,20 @@
+{
+  "name": "MK Shape",
+  "matchName": "Pseudo/MotionKit Shape v1",
+  "params": [
+    { "type": "slider", "name": "Width", "value": 400, "sliderMin": 0, "sliderMax": 2000, "validMin": 0, "validMax": 10000, "precision": 1 },
+    { "type": "slider", "name": "Height", "value": 400, "sliderMin": 0, "sliderMax": 2000, "validMin": 0, "validMax": 10000, "precision": 1 },
+    { "type": "slider", "name": "Roundness", "value": 0, "sliderMin": 0, "sliderMax": 500, "validMin": 0, "validMax": 10000, "precision": 1 },
+    { "type": "slider", "name": "Points", "value": 5, "sliderMin": 3, "sliderMax": 20, "validMin": 3, "validMax": 100, "precision": 0 },
+    { "type": "slider", "name": "Inner Radius %", "value": 50, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 100, "precision": 1 },
+    { "type": "slider", "name": "Head Size", "value": 40, "sliderMin": 0, "sliderMax": 300, "validMin": 0, "validMax": 2000, "precision": 1 },
+    { "type": "checkbox", "name": "Fill", "value": true, "label": "On" },
+    { "type": "color", "name": "Fill Color", "value": [255, 255, 255] },
+    { "type": "checkbox", "name": "Stroke", "value": false, "label": "On" },
+    { "type": "color", "name": "Stroke Color", "value": [255, 255, 255] },
+    { "type": "slider", "name": "Stroke Width", "value": 8, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 1000, "precision": 1 },
+    { "type": "slider", "name": "Trim Start", "value": 0, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 100, "precision": 1 },
+    { "type": "slider", "name": "Trim End", "value": 100, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 100, "precision": 1 },
+    { "type": "angle", "name": "Trim Offset", "value": 0 }
+  ]
+}
