@@ -90,7 +90,8 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return m.substring(0, MATCHNAME_MAX);
   }
 
-  // 疑似エフェクトの内部名は「Pseudo/」で始まらないと、AE が本物のエフェクトを探しに行ってしまう
+  // 疑似エフェクトの内部名は「Pseudo/」で始まらないと、AE が本物のエフェクトを探しに行ってしまう。
+  // 画面では「Pseudo/」を見せず、書き出すときにだけ付ける
   function normalizeMatchName(m) {
     if (!m) return "";
     return /^Pseudo\//.test(m) ? m : "Pseudo/" + m;
@@ -150,7 +151,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     var def = currentDefinition();
     if (!def.name) errors.push("エフェクト名が空です。");
     if (!isAscii(def.name) || def.name.length > NAME_MAX) errors.push("エフェクト名は半角英数字で" + NAME_MAX + "文字までにしてください。");
-    if (!isAscii(def.matchName) || def.matchName.length > MATCHNAME_MAX) errors.push("内部名は半角英数字で" + MATCHNAME_MAX + "文字までにしてください。");
+    if (!isAscii(def.matchName) || def.matchName.length > MATCHNAME_MAX) errors.push("内部名は半角英数字で" + (MATCHNAME_MAX - "Pseudo/".length) + "文字までにしてください。");
     if (state.items.length === 0) errors.push("項目が1つもありません。");
 
     var depth = 0;
@@ -314,7 +315,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     if (!f) return;
     var def = eval("(" + readText(f) + ")");
     state.name = def.name;
-    state.matchName = def.matchName || "";
+    state.matchName = (def.matchName || "").replace(/^Pseudo\//, "");
     state.items = unnest(def.params || [], []);
     refreshAll();
   }
