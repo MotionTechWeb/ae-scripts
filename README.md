@@ -13,20 +13,21 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 
 テキストレイヤーと、その背景になるシェイプレイヤーをセットで作成します。
 座布団のサイズはエクスプレッションでテキストの大きさ（`sourceRectAtTime()`）に追従するため、文字を打ち替えても自動で伸び縮みします。
+座布団はテキストレイヤーを親にしているので、テキストを移動・拡大・回転すると一緒についてきます。
 
 #### ファイル構成
 
 | ファイル | 役割 |
 | --- | --- |
 | `zabuton.jsx` | スクリプト本体（ソース） |
-| `zabuton.jsxbin` | バイナリ化した配布用スクリプト |
-| `effectContlor_zabuton.ffx` | 座布団の調整用エフェクト（疑似エフェクト「Zabuton」）のプリセット。スクリプトから読み込まれる |
+| `zabuton.jsxbin` | バイナリ化した配布用スクリプト（`zabuton.jsx` から書き出す） |
+| `effectControl_zabuton.ffx` | 調整用エフェクト（疑似エフェクト「Zabuton」）の元データ。中身は `zabuton.jsx` に埋め込み済みなので、実行時には不要 |
 
 #### 実行すると起きること
 
-1. アクティブなコンポジションにシェイプレイヤーを追加し、`effectContlor_zabuton.ffx` を適用する
+1. アクティブなコンポジションにシェイプレイヤー「Zabuton」を追加し、埋め込んだ疑似エフェクト「Zabuton」を適用する
 2. テキストレイヤー（中身は `sourceText`）を追加し、アンカーポイントを文字の中心に合わせるエクスプレッションを設定する
-3. シェイプに長方形と塗りを追加し、サイズ・角丸・色をエフェクトの値とテキストの大きさにリンクする
+3. シェイプの親をテキストレイヤーにし、長方形と塗りを追加して、位置・サイズ・角丸・色をテキストとエフェクトの値にリンクする
 
 #### エフェクトコントロール「Zabuton」の項目
 
@@ -39,8 +40,7 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 
 #### 使い方
 
-1. `zabuton.jsx`（または `zabuton.jsxbin`）と `effectContlor_zabuton.ffx` を **同じフォルダ** に置く
-   （スクリプトは自身と同じフォルダにある `.ffx` を読み込みます）
+1. `zabuton.jsx`（または `zabuton.jsxbin`）を任意のフォルダに置く（`.ffx` は不要です）
 2. After Effects でコンポジションを開いてアクティブにする
 3. 「ファイル > スクリプト > スクリプトファイルを実行...」から `zabuton.jsx` を実行する
    （After Effects の `Scripts` フォルダに置けば「ファイル > スクリプト」メニューから直接実行できます）
@@ -58,7 +58,7 @@ ae-scripts/
    └─ zabuton/
       ├─ zabuton.jsx
       ├─ zabuton.jsxbin
-      └─ effectContlor_zabuton.ffx
+      └─ effectControl_zabuton.ffx
 ```
 
 ### 今後の構成（予定）
