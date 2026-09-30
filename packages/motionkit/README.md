@@ -19,7 +19,7 @@
 | 長方形 | Width, Height, Roundness（角丸の半径 px） |
 | 楕円 | Width, Height |
 | 多角形 | Width（直径）, Points, Roundness（%） |
-| 星 | Width（直径）, Points, Inner Radius %, Roundness（%） |
+| 星 | Width（直径）, Points, Inner Radius, Roundness（%） |
 | ライン | Width（長さ） |
 | 矢印 | Width（長さ）, Head Size |
 | リング | Width, Height（線だけの楕円） |
@@ -30,7 +30,7 @@ Trim End にキーフレームを打てば、線を描いていくアニメー�
 ## アニメ
 
 選んだレイヤーに登場の動きを付けます（キーフレームではなくエクスプレッションなので、あとから長さや種類を変えられます）。
-エフェクト「MK Anim」の項目:
+エフェクト「MK_Anim」の項目:
 
 | 項目 | 内容 |
 | --- | --- |
@@ -44,13 +44,13 @@ Trim End にキーフレームを打てば、線を描いていくアニメー�
 | Fade | Fade 以外の動きにも、不透明度のフェードを重ねる |
 | Out / Out Duration | レイヤーの終わりに、同じ動きを逆再生して退場する |
 
-スケール・不透明度・位置・回転（シェイプレイヤーはトリムパス「MK Wipe」も）にエクスプレッションを入れます。
+スケール・不透明度・位置・回転（シェイプレイヤーはトリムパス「MK_Wipe」も）にエクスプレッションを入れます。
 すでに別のエクスプレッションが入っているときは、置き換えてよいか確認します。「外す」でエフェクトとエクスプレッションを取り除きます。
 
 ## 配置
 
-選んだレイヤーを、選んだ順に並べます。ヌル「MK Layout」を作って各レイヤーの親にするので、
-ヌルを動かす・回す・拡大すると全体がついてきます。並べ方はヌルのエフェクト「MK Layout」で後から変えられます。
+選んだレイヤーを、選んだ順に並べます。ヌル「MK_Layout」を作って各レイヤーの親にするので、
+ヌルを動かす・回す・拡大すると全体がついてきます。並べ方はヌルのエフェクト「MK_Layout」で後から変えられます。
 
 | Mode | 使う項目 |
 | --- | --- |
@@ -68,10 +68,11 @@ Trim End にキーフレームを打てば、線を描いていくアニメー�
 | ファイル | 役割 |
 | --- | --- |
 | `motionkit.jsx` | パネル本体。`@MK_BUILD_START`〜`@MK_BUILD_END` の間は生成部分 |
-| `effects/*.ck.json` | 疑似エフェクト（MK Shape / MK Anim / MK Layout）の設定。CtrlKit で読み込んで編集できる |
+| `effects/*.ck.json` | 疑似エフェクト（MK_Shape / MK_Anim / MK_Layout）の設定。CtrlKit で読み込んで編集できる |
 | `src/expressions.jsxinc` | レイヤーに書き込むエクスプレッション |
 | `tools/build.js` | 上の2つから `.ffx` を作り、`motionkit.jsx` に埋め込む |
 | `test/run.js` | 埋め込みが最新か、エクスプレッションが期待どおり動くかを Node で確かめる |
 
 `effects/` か `src/` を変えたら `node packages/motionkit/tools/build.js` を実行してください。
-疑似エフェクトの項目を変えたときは、AE が古い定義を覚えているため `matchName` の末尾（`v1`）も上げてください。
+疑似エフェクトの項目を変えたときは、AE が古い定義を覚えているため名前（`name`）も変えてください。
+`matchName` は必ず `Pseudo/` + `name` にしてください（例: `MK_Shape2` と `Pseudo/MK_Shape2`）。名前と内部名が食い違うと、AE があとからエフェクトを見つけられず「Actual missing plugin」で落ちることがあります。

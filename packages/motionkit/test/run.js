@@ -29,7 +29,7 @@ const paramNames = (def) => def.params.map((p) => p.name);
 for (const key in defs) {
   const d = defs[key];
   check(`${d.name}: 項目名は31文字以内・ASCII`, d.params.every((p) => p.name.length <= 31 && /^[\x20-\x7e]+$/.test(p.name)));
-  check(`${d.name}: 内部名は Pseudo/ で始まり34文字以内`, /^Pseudo\//.test(d.matchName) && d.matchName.length <= 34);
+  check(`${d.name}: 内部名は Pseudo/ + 名前（食い違うと AE がエフェクトを見失う）`, d.matchName === "Pseudo/" + d.name && /^[A-Za-z0-9_]+$/.test(d.name) && d.matchName.length <= 31);
 }
 
 // setParams({...}) で使っている項目名がエフェクトにあるか
@@ -62,7 +62,7 @@ function makeEffect(def, values) {
   };
 }
 
-// env: { value, time, inPoint, outPoint, effects: { "MK Anim": {...} }, layers: { name: { anchor, layout: {...} } } }
+// env: { value, time, inPoint, outPoint, effects: { "MK_Anim": {...} }, layers: { name: { anchor, layout: {...} } } }
 function evalExpr(code, env) {
   let rnd = 0;
   const sandbox = {
@@ -71,7 +71,7 @@ function evalExpr(code, env) {
     inPoint: env.inPoint || 0,
     outPoint: env.outPoint === undefined ? 10 : env.outPoint,
     effect(name) {
-      const key = { "MK Shape": "shape", "MK Anim": "anim" }[name];
+      const key = { "MK_Shape": "shape", "MK_Anim": "anim" }[name];
       if (!env.effects || !env.effects[name]) throw new Error("エフェクトがありません: " + name);
       return makeEffect(defs[key], env.effects[name]);
     },
@@ -81,7 +81,7 @@ function evalExpr(code, env) {
         if (!l) throw new Error("レイヤーがありません: " + name);
         return {
           effect: (n) => {
-            if (n !== "MK Layout") throw new Error("エフェクトがありません: " + n);
+            if (n !== "MK_Layout") throw new Error("エフェクトがありません: " + n);
             return makeEffect(defs.layout, l.layout);
           },
           transform: { anchorPoint: { value: l.anchor || [50, 50] } },
@@ -96,9 +96,9 @@ function evalExpr(code, env) {
 }
 
 // シェイプ
-const shapeEnv = (vals) => ({ effects: { "MK Shape": vals || {} } });
+const shapeEnv = (vals) => ({ effects: { "MK_Shape": vals || {} } });
 check("シェイプ: サイズ", nearV(evalExpr(E.shape.size, shapeEnv({ Width: 300, Height: 120 })), [300, 120]));
-check("シェイプ: 星の内側の半径", near(evalExpr(E.shape.innerRadius, shapeEnv({ Width: 400, "Inner Radius %": 25 })), 50));
+check("シェイプ: 星の内側の半径", near(evalExpr(E.shape.innerRadius, shapeEnv({ Width: 400, "Inner Radius": 25 })), 50));
 check("シェイプ: 塗りのオン／オフ", evalExpr(E.shape.fillOpacity, shapeEnv({ Fill: 0 })) === 0 && evalExpr(E.shape.fillOpacity, shapeEnv({ Fill: 1 })) === 100);
 const line = evalExpr(E.shape.line, shapeEnv({ Width: 600 }));
 check("シェイプ: ライン", JSON.stringify(line.points) === "[[-300,0],[300,0]]" && line.closed === false);
@@ -109,7 +109,7 @@ for (const k in E.shape) {
 }
 
 // アニメ
-const anim = (vals, extra) => Object.assign({ effects: { "MK Anim": vals } }, extra);
+const anim = (vals, extra) => Object.assign({ effects: { "MK_Anim": vals } }, extra);
 check("アニメ: エフェクトが無ければ元の値", nearV(evalExpr(E.animScale(), { value: [100, 100], time: 0 }), [100, 100]));
 check("アニメ: ポップの開始は0", nearV(evalExpr(E.animScale(), anim({ Type: 1 }, { value: [100, 100], time: 0 })), [0, 0]));
 check("アニメ: ポップの終わりは元の値", nearV(evalExpr(E.animScale(), anim({ Type: 1 }, { value: [100, 80], time: 0.5 })), [100, 80]));
@@ -139,8 +139,8 @@ for (let ez = 1; ez <= 6; ez++) {
 }
 
 // 配置
-const info = (i, n, ctrl) => ({ ctrl: ctrl || "MK Layout", i, n });
-const lay = (layout, extra) => Object.assign({ layers: { "MK Layout": { anchor: [50, 50], layout } } }, extra);
+const info = (i, n, ctrl) => ({ ctrl: ctrl || "MK_Layout", i, n });
+const lay = (layout, extra) => Object.assign({ layers: { "MK_Layout": { anchor: [50, 50], layout } } }, extra);
 const gridPos = [0, 1, 2, 3].map((i) => evalExpr(E.position(info(i, 4)), lay({ Mode: 1, Columns: 2 }, { value: [0, 0] })));
 check("配置: グリッド", JSON.stringify(gridPos) === JSON.stringify([[-50, -50], [150, -50], [-50, 150], [150, 150]]), JSON.stringify(gridPos));
 const circ = evalExpr(E.position(info(1, 4)), lay({ Mode: 2, Radius: 100, "Start Angle": 0 }, { value: [0, 0] }));
@@ -150,7 +150,7 @@ check("配置: 円の範囲が360未満なら両端まで", nearV(evalExpr(E.pos
 check("配置: 直線", nearV(evalExpr(E.position(info(0, 3)), lay({ Mode: 3, "Spacing X": 100, "Spacing Y": 0 }, { value: [0, 0] })), [-50, 50]));
 check("配置: ランダム", nearV(evalExpr(E.position(info(0, 3)), lay({ Mode: 4, "Scatter Width": 1000, "Scatter Height": 100 }, { value: [0, 0] })), [-200, 25]));
 check("配置: 3Dレイヤーは Z を残す", nearV(evalExpr(E.position(info(0, 1)), lay({ Mode: 3 }, { value: [0, 0, -300] })), [50, 50, -300]));
-const both = evalExpr(E.position(info(0, 1)), Object.assign(lay({ Mode: 3 }, { value: [0, 0], time: 0 }), { effects: { "MK Anim": { Type: 3 } } }));
+const both = evalExpr(E.position(info(0, 1)), Object.assign(lay({ Mode: 3 }, { value: [0, 0], time: 0 }), { effects: { "MK_Anim": { Type: 3 } } }));
 check("配置＋スライド", nearV(both, [50, 250]), both);
 const back = E.parseLayout(E.position(info(3, 7, 'My "Grid" 2')));
 check("配置の目印を読み戻せる", back.i === 3 && back.n === 7 && back.ctrl === 'My "Grid" 2', JSON.stringify(back));

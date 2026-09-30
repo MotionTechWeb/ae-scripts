@@ -7,9 +7,9 @@
  * 配置の情報は 1 行目の目印コメント（// @mk-layout ...）に残し、書き直すときに読み戻す。
  */
 var MK_Expr = (function () {
-  var SHAPE = "MK Shape";
-  var ANIM = "MK Anim";
-  var LAYOUT = "MK Layout";
+  var SHAPE = "MK_Shape";
+  var ANIM = "MK_Anim";
+  var LAYOUT = "MK_Layout";
 
   function q(s) {
     return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
@@ -20,7 +20,7 @@ var MK_Expr = (function () {
   }
 
   // ---------------------------------------------------------------------
-  // シェイプ（エフェクト「MK Shape」の値を読むだけ）
+  // シェイプ（エフェクト「MK_Shape」の値を読むだけ）
   // ---------------------------------------------------------------------
   function fx(name) {
     return "effect(" + q(SHAPE) + ")(" + q(name) + ").value";
@@ -31,7 +31,7 @@ var MK_Expr = (function () {
     roundness: fx("Roundness") + ";",
     points: fx("Points") + ";",
     outerRadius: fx("Width") + " / 2;",
-    innerRadius: fx("Width") + " / 2 * " + fx("Inner Radius %") + " / 100;",
+    innerRadius: fx("Width") + " / 2 * " + fx("Inner Radius") + " / 100;",
     fillColor: fx("Fill Color") + ";",
     fillOpacity: fx("Fill") + " ? 100 : 0;",
     strokeColor: fx("Stroke Color") + ";",
@@ -52,7 +52,7 @@ var MK_Expr = (function () {
   };
 
   // ---------------------------------------------------------------------
-  // アニメ（エフェクト「MK Anim」）
+  // アニメ（エフェクト「MK_Anim」）
   // mkAnim() は進み具合 p（イージング後。オーバーシュートで 1 を超える）と
   // lin（直線の 0〜1）を返す。エフェクトが無ければ null。
   // ---------------------------------------------------------------------
@@ -129,7 +129,7 @@ var MK_Expr = (function () {
   }
 
   // ---------------------------------------------------------------------
-  // 配置（ヌル「MK Layout」のエフェクト）
+  // 配置（ヌル「MK_Layout」のエフェクト）
   // 子レイヤーは配置用ヌルを親にするので、位置はヌルのアンカーポイントからのずれで表す
   // ---------------------------------------------------------------------
   var LAYOUT_FN = lines([

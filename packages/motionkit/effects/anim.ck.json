@@ -1,6 +1,6 @@
 {
-  "name": "MK Anim",
-  "matchName": "Pseudo/MotionKit Anim v1",
+  "name": "MK_Anim",
+  "matchName": "Pseudo/MK_Anim",
   "params": [
     { "type": "popup", "name": "Type", "items": ["Pop", "Fade", "Slide", "Rotate", "Wipe"], "value": 1 },
     { "type": "slider", "name": "Start", "value": 0, "sliderMin": 0, "sliderMax": 10, "validMin": -3600, "validMax": 3600, "precision": 2 },

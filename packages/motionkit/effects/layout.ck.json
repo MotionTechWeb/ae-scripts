@@ -1,6 +1,6 @@
 {
-  "name": "MK Layout",
-  "matchName": "Pseudo/MotionKit Layout v1",
+  "name": "MK_Layout",
+  "matchName": "Pseudo/MK_Layout",
   "params": [
     { "type": "popup", "name": "Mode", "items": ["Grid", "Circle", "Line", "Scatter"], "value": 1 },
     { "type": "slider", "name": "Columns", "value": 3, "sliderMin": 1, "sliderMax": 20, "validMin": 1, "validMax": 1000, "precision": 0 },
