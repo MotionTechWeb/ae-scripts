@@ -532,7 +532,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return isNaN(v) ? 0 : v;
   }
 
-  function byte(et) {
+  function toByte(et) {
     return Math.max(0, Math.min(255, Math.round(num(et))));
   }
 
@@ -563,7 +563,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         p.label = ui.cbLabel.text;
         break;
       case "color":
-        p.value = [byte(ui.colRGB[0]), byte(ui.colRGB[1]), byte(ui.colRGB[2])];
+        p.value = [toByte(ui.colRGB[0]), toByte(ui.colRGB[1]), toByte(ui.colRGB[2])];
         break;
       case "point":
         p.value = [num(ui.ptXY[0]), num(ui.ptXY[1])];
