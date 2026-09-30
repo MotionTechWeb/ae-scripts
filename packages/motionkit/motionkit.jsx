@@ -1056,6 +1056,11 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
     return [c[0] / 255, c[1] / 255, c[2] / 255];
   }
 
+  // カラーの項目は [R, G, B, A]（0〜1）で入れる
+  function rgba01(c) {
+    return [c[0] / 255, c[1] / 255, c[2] / 255, 1];
+  }
+
   function transform(layer) {
     return layer.property("ADBE Transform Group");
   }
@@ -1111,9 +1116,9 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
       Width: opts.width,
       Height: shape.key === "ring" || shape.key === "polygon" || shape.key === "star" ? opts.width : opts.height,
       Fill: fill,
-      "Fill Color": rgb01(opts.fillColor),
+      "Fill Color": rgba01(opts.fillColor),
       Stroke: strokeOnly || opts.stroke,
-      "Stroke Color": rgb01(opts.strokeColor),
+      "Stroke Color": rgba01(opts.strokeColor),
       "Stroke Width": opts.strokeWidth
     });
 
@@ -1380,27 +1385,29 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
     return d;
   }
 
-  // クリックで色を選べる色見本
+  // 色見本と「色...」ボタン。見本は背景色で塗るだけにする
+  // （ボタンを onDraw で描くと、AE によっては再描画が止まらず固まるため）
   function swatch(parent, color) {
-    var b = parent.add("button", undefined, "");
-    b.preferredSize = [36, 20];
-    b.color = color;
-    b.onDraw = function () {
-      var g = this.graphics;
-      var c = rgb01(this.color);
-      g.newPath();
-      g.rectPath(0, 0, this.size[0], this.size[1]);
-      g.fillPath(g.newBrush(g.BrushType.SOLID_COLOR, [c[0], c[1], c[2], 1]));
-    };
+    var g = parent.add("group");
+    g.spacing = 4;
+    var chip = g.add("panel");
+    chip.preferredSize = [28, 18];
+    var b = g.add("button", undefined, "色...");
+    b.preferredSize.width = 44;
+    var sw = { color: color };
+    function paint() {
+      var c = rgb01(sw.color);
+      chip.graphics.backgroundColor = chip.graphics.newBrush(chip.graphics.BrushType.SOLID_COLOR, [c[0], c[1], c[2], 1]);
+    }
+    paint();
     b.onClick = function () {
-      var cur = (this.color[0] << 16) | (this.color[1] << 8) | this.color[2];
+      var cur = (sw.color[0] << 16) | (sw.color[1] << 8) | sw.color[2];
       var picked = $.colorPicker(cur);
       if (picked < 0) return;
-      this.color = [(picked >> 16) & 255, (picked >> 8) & 255, picked & 255];
-      this.hide();
-      this.show();
+      sw.color = [(picked >> 16) & 255, (picked >> 8) & 255, picked & 255];
+      paint();
     };
-    return b;
+    return sw;
   }
 
   function buildShapeTab(tab) {
