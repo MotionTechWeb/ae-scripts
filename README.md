@@ -21,8 +21,8 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 | ファイル | 役割 |
 | --- | --- |
 | `zabuton.jsx` | スクリプト本体（ソース） |
-| `zabuton.jsxbin` | バイナリ化した配布用スクリプト（`zabuton.jsx` から書き出す） |
 | `effectControl_zabuton.ffx` | 調整用エフェクト（疑似エフェクト「Zabuton」）の元データ。中身は `zabuton.jsx` に埋め込み済みなので、実行時には不要 |
+| `zabuton.ck.json` | 疑似エフェクトの設定。CtrlKit で読み込むと項目を編集して `.ffx` を作り直せる |
 
 #### 実行すると起きること
 
@@ -41,7 +41,7 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 
 #### 使い方
 
-1. `zabuton.jsx`（または `zabuton.jsxbin`）を任意のフォルダに置く（`.ffx` は不要です）
+1. `zabuton.jsx` を任意のフォルダに置く（`.ffx` は不要です）
 2. After Effects でコンポジションを開いてアクティブにする
 3. 「ファイル > スクリプト > スクリプトファイルを実行...」から `zabuton.jsx` を実行する
    （After Effects の `Scripts` フォルダに置けば「ファイル > スクリプト」メニューから直接実行できます）
@@ -58,7 +58,7 @@ ae-scripts/
 └─ packages/
    ├─ zabuton/
    │  ├─ zabuton.jsx
-   │  ├─ zabuton.jsxbin
+   │  ├─ zabuton.ck.json
    │  └─ effectControl_zabuton.ffx
    └─ ctrlkit/
       ├─ ctrlkit.jsx

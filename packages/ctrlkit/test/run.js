@@ -15,28 +15,11 @@ function check(name, ok, info) {
   if (!ok) failed++;
 }
 
-// 1) Zabuton の定義から作った .ffx が、元ファイル（RIFX部分）と一致するか
+// 1) Zabuton の設定ファイルから作った .ffx が、リポジトリの effectControl_zabuton.ffx と一致するか
 const orig = fs.readFileSync(path.join(__dirname, "../../zabuton/effectControl_zabuton.ffx"));
-const riffLen = 8 + orig.readUInt32BE(4);
-// 元ファイルの内部名（エフェクトの tdmn）をそのまま使う
-const parade = orig.indexOf("ADBE Effect Parade");
-const mnAt = orig.indexOf("tdmn", parade + 40) + 8;
-const origMatchName = orig.toString("latin1", mnAt, mnAt + 40).replace(/\0+$/, "");
-const zabuton = {
-  name: "Zabuton",
-  matchName: origMatchName,
-  params: [
-    { type: "slider", name: "X_position_Padding", validMin: 0, validMax: 5000, sliderMin: 0, sliderMax: 5000, value: 0, hold: true },
-    { type: "slider", name: "Y_position_Padding", validMin: 0, validMax: 5000, sliderMin: 0, sliderMax: 5000, value: 0 },
-    { type: "slider", name: "zabuton_radius", validMin: 0, validMax: 1000, sliderMin: 0, sliderMax: 1000, value: 0 },
-    { type: "color", name: "BG_Color", value: [255, 0, 0] },
-  ],
-};
+const zabuton = JSON.parse(fs.readFileSync(path.join(__dirname, "../../zabuton/zabuton.ck.json"), "utf8"));
 const built = toBuf(ctx.CK_FFXWriter.build(zabuton));
-let firstDiff = -1;
-for (let i = 0; i < Math.max(built.length, riffLen); i++) if (built[i] !== orig[i]) { firstDiff = i; break; }
-check("Zabuton の .ffx をバイト単位で再現", built.length === riffLen && firstDiff === -1,
-  `長さ ${built.length} / 期待 ${riffLen}, 最初の違い @${firstDiff}`);
+check("Zabuton の .ffx を設定ファイルから再現", built.equals(orig), `長さ ${built.length} / 期待 ${orig.length}`);
 
 // 2) 浮動小数の書き出し
 const f64 = (v) => toBuf(ctx.CK_Binary.f64(v)).toString("hex");
@@ -57,7 +40,41 @@ if (ctx.CK_Embed) {
   check("スニペットが構文として正しい", (() => { try { new Function(snippet); return true; } catch (e) { return e.message; } })() === true);
 }
 
-// 4) 別の定義でも RIFX のチャンク構造（サイズ）が壊れていないか
+// 4) 全種類の見本（samples/SampleA.ffx があるときだけ）
+const samplePath = path.join(__dirname, "../samples/SampleA.ffx");
+if (fs.existsSync(samplePath)) {
+  const sample = fs.readFileSync(samplePath);
+  const sampleLen = 8 + sample.readUInt32BE(4);
+  const pm = sample.indexOf("tdmn", sample.indexOf("ADBE Effect Parade") + 40) + 8;
+  const sampleDef = {
+    name: "Pseudo Effect Name",
+    matchName: sample.toString("latin1", pm, pm + 40).replace(/\0+$/, ""),
+    params: [
+      { type: "slider", name: "sl", value: 12.5, sliderMin: 0, sliderMax: 150, validMin: -100, validMax: 200, precision: 2 },
+      { type: "angle", name: "ang", value: 1845 },
+      { type: "checkbox", name: "chk", value: true, label: "chkLabel", invisible: true, hold: true },
+      { type: "color", name: "col", value: [16, 32, 48], invisible: true, hold: true },
+      { type: "group", name: "grp", invisible: true, params: [
+        { type: "slider", name: "inner", value: 0, sliderMin: -10, sliderMax: 10, validMin: -100, validMax: 100,
+          precision: 2, percent: true, pixel: true, invisible: true, hold: true },
+      ] },
+      { type: "label", name: "lbl", dim: true },
+      { type: "layer", name: "lyr" },
+      { type: "point", name: "pt", value: [100, 200], current: [14, 40] },
+      { type: "point3d", name: "pt3", value: [10, 20, 30], current: [1.4, 4, 6] },
+      { type: "popup", name: "pop", items: ["AA", "BB", "CC"], value: 2, hold: true },
+    ],
+  };
+  const b = toBuf(ctx.CK_FFXWriter.build(sampleDef));
+  const diffs = [];
+  for (let i = 0; i < Math.max(b.length, sampleLen); i++) if (b[i] !== sample[i]) diffs.push(i);
+  check("全種類の見本をバイト単位で再現", b.length === sampleLen && diffs.length === 0,
+    `長さ ${b.length} / 期待 ${sampleLen}, 違い ${diffs.length}か所: ` + diffs.slice(0, 8).map((i) => `@${i} ${b[i]?.toString(16)}≠${sample[i]?.toString(16)}`).join(" "));
+} else {
+  console.log("skip 全種類の見本（samples/SampleA.ffx がありません）");
+}
+
+// 5) 別の定義でも RIFX のチャンク構造（サイズ）が壊れていないか
 function walk(buf, off, end) {
   while (off + 8 <= end) {
     const tag = buf.toString("latin1", off, off + 4);

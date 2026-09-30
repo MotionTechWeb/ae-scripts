@@ -4,7 +4,8 @@ date:2026/09/30
 AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め込み用のコード」を書き出すパネル。
 
 - ScriptUI Panels フォルダに src フォルダごと置くとドッキングパネルとして使える
-- 今のところ対応している種類: スライダー、カラー
+- 対応している種類: スライダー、角度、チェックボックス、カラー、ポイント、3Dポイント、
+  ドロップダウン、レイヤー、ラベル、グループ
 */
 
 //@include "src/binary.jsxinc"
@@ -18,21 +19,70 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   var MATCHNAME_MAX = 34;
   var NAME_MAX = 31;
 
+  // パネル内では項目を平らな並びで持つ。グループは「group」と「groupEnd」で囲む
+  var TYPES = [
+    { type: "slider", label: "スライダー" },
+    { type: "angle", label: "角度" },
+    { type: "checkbox", label: "チェックボックス" },
+    { type: "color", label: "カラー" },
+    { type: "point", label: "ポイント" },
+    { type: "point3d", label: "3Dポイント" },
+    { type: "popup", label: "ドロップダウン" },
+    { type: "layer", label: "レイヤー" },
+    { type: "label", label: "ラベル" },
+    { type: "group", label: "グループ" }
+  ];
+  var HOLDABLE = { slider: 1, angle: 1, checkbox: 1, color: 1, popup: 1 };
+  var HIDEABLE = { slider: 1, checkbox: 1, color: 1, point: 1, point3d: 1, popup: 1, layer: 1, group: 1 };
+
   var state = {
     name: "MyEffect",
     matchName: "",
-    params: []
+    items: []
   };
 
   // ---------------------------------------------------------------------
   // 定義まわり
   // ---------------------------------------------------------------------
-  function newSlider() {
-    return { type: "slider", name: "Slider", validMin: 0, validMax: 100, sliderMin: 0, sliderMax: 100, value: 0 };
+  function typeLabel(type) {
+    if (type === "groupEnd") return "グループ終了";
+    for (var i = 0; i < TYPES.length; i++) if (TYPES[i].type === type) return TYPES[i].label;
+    return type;
   }
 
-  function newColor() {
-    return { type: "color", name: "Color", value: [255, 255, 255] };
+  function newItem(type) {
+    var n = { type: type, name: type.charAt(0).toUpperCase() + type.substring(1) };
+    switch (type) {
+      case "slider":
+        n.value = 0;
+        n.sliderMin = 0;
+        n.sliderMax = 100;
+        n.validMin = 0;
+        n.validMax = 100;
+        n.precision = 0;
+        break;
+      case "angle":
+        n.value = 0;
+        break;
+      case "checkbox":
+        n.value = false;
+        n.label = "";
+        break;
+      case "color":
+        n.value = [255, 255, 255];
+        break;
+      case "point":
+        n.value = [50, 50];
+        break;
+      case "point3d":
+        n.value = [50, 50, 0];
+        break;
+      case "popup":
+        n.items = ["Item 1", "Item 2", "Item 3"];
+        n.value = 1;
+        break;
+    }
+    return n;
   }
 
   function defaultMatchName(name) {
@@ -44,25 +94,69 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return /^[\x20-\x7e]*$/.test(s);
   }
 
+  // 平らな並び → 入れ子（ffx-writer の形式）
+  function nest(items) {
+    var root = [];
+    var stack = [root];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.type === "groupEnd") {
+        if (stack.length > 1) stack.pop();
+        continue;
+      }
+      var copy = {};
+      for (var k in it) if (it.hasOwnProperty(k)) copy[k] = it[k];
+      stack[stack.length - 1].push(copy);
+      if (it.type === "group") {
+        copy.params = [];
+        stack.push(copy.params);
+      }
+    }
+    return root;
+  }
+
+  // 入れ子 → 平らな並び（設定ファイルの読み込み用）
+  function unnest(params, out) {
+    for (var i = 0; i < params.length; i++) {
+      var p = params[i];
+      var copy = {};
+      for (var k in p) if (p.hasOwnProperty(k) && k !== "params") copy[k] = p[k];
+      out.push(copy);
+      if (p.type === "group") {
+        unnest(p.params || [], out);
+        out.push({ type: "groupEnd", name: "" });
+      }
+    }
+    return out;
+  }
+
   function currentDefinition() {
     return {
       name: state.name,
       matchName: state.matchName || defaultMatchName(state.name),
-      params: state.params
+      params: nest(state.items)
     };
   }
 
   // 問題があればメッセージの配列を返す
-  function validate(def) {
+  function validate() {
     var errors = [];
+    var def = currentDefinition();
     if (!def.name) errors.push("エフェクト名が空です。");
     if (!isAscii(def.name) || def.name.length > NAME_MAX) errors.push("エフェクト名は半角英数字で" + NAME_MAX + "文字までにしてください。");
     if (!isAscii(def.matchName) || def.matchName.length > MATCHNAME_MAX) errors.push("内部名は半角英数字で" + MATCHNAME_MAX + "文字までにしてください。");
-    if (def.params.length === 0) errors.push("項目が1つもありません。");
+    if (state.items.length === 0) errors.push("項目が1つもありません。");
+
+    var depth = 0;
     var seen = {};
-    for (var i = 0; i < def.params.length; i++) {
-      var p = def.params[i];
-      var label = (i + 1) + "番目（" + p.name + "）: ";
+    for (var i = 0; i < state.items.length; i++) {
+      var p = state.items[i];
+      var label = i + 1 + "番目（" + (p.name || typeLabel(p.type)) + "）: ";
+      if (p.type === "groupEnd") {
+        if (--depth < 0) errors.push(label + "対応するグループがありません。");
+        continue;
+      }
+      if (p.type === "group") depth++;
       if (!p.name || !isAscii(p.name) || p.name.length > NAME_MAX) errors.push(label + "名前は半角英数字で" + NAME_MAX + "文字までにしてください。");
       if (seen[p.name]) errors.push(label + "名前が重複しています。");
       seen[p.name] = true;
@@ -72,7 +166,16 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         }
         if (p.value < p.validMin || p.value > p.validMax) errors.push(label + "初期値が有効範囲の外です。");
       }
+      if (p.type === "checkbox" && !isAscii(p.label || "")) errors.push(label + "チェックボックスの文字は半角英数字にしてください。");
+      if (p.type === "popup") {
+        if (p.items.length < 1) errors.push(label + "ドロップダウンの項目がありません。");
+        for (var j = 0; j < p.items.length; j++) {
+          if (!isAscii(p.items[j]) || /\|/.test(p.items[j])) errors.push(label + "ドロップダウンの項目は半角英数字で、「|」は使えません。");
+        }
+        if (p.value < 1 || p.value > p.items.length) errors.push(label + "初期値の番号が項目の数を超えています。");
+      }
     }
+    if (depth > 0) errors.push("閉じられていないグループがあります（「グループ終了」を追加してください）。");
     return errors;
   }
 
@@ -125,12 +228,19 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     });
   }
 
+  function checkOrAlert() {
+    var errors = validate();
+    if (errors.length) {
+      alert(errors.join("\n"), TITLE);
+      return false;
+    }
+    return true;
+  }
+
   // 書き出し: 選んだフォルダに <名前>.ffx と <名前>_ffx.jsx を作る
   function exportFiles() {
+    if (!checkOrAlert()) return;
     var def = currentDefinition();
-    var errors = validate(def);
-    if (errors.length) return alert(errors.join("\n"), TITLE);
-
     var folder = Folder.selectDialog("書き出し先のフォルダを選んでください");
     if (!folder) return;
     var bytes = CK_FFXWriter.build(def);
@@ -155,15 +265,13 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
 
   // 選択中のレイヤーにその場で適用して見た目を確認する
   function preview() {
-    var def = currentDefinition();
-    var errors = validate(def);
-    if (errors.length) return alert(errors.join("\n"), TITLE);
+    if (!checkOrAlert()) return;
     var comp = app.project.activeItem;
     if (!(comp instanceof CompItem) || comp.selectedLayers.length === 0) {
       return alert("プレビューするレイヤーを選択してください。", TITLE);
     }
     var tmp = new File(Folder.temp.fsName + "/ck_preview.ffx");
-    writeBinary(tmp, CK_FFXWriter.build(def));
+    writeBinary(tmp, CK_FFXWriter.build(currentDefinition()));
     app.beginUndoGroup(TITLE + " プレビュー");
     try {
       comp.selectedLayers[0].applyPreset(tmp);
@@ -176,22 +284,17 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   function loadSettings() {
     var f = File.openDialog("設定ファイル（.ck.json）を選んでください", "*.json");
     if (!f) return;
-    try {
-      var def = eval("(" + readText(f) + ")");
-      state.name = def.name;
-      state.matchName = def.matchName || "";
-      state.params = def.params || [];
-      refreshAll();
-    } catch (e) {
-      alert("読み込めませんでした: " + e.toString(), TITLE);
-    }
+    var def = eval("(" + readText(f) + ")");
+    state.name = def.name;
+    state.matchName = def.matchName || "";
+    state.items = unnest(def.params || [], []);
+    refreshAll();
   }
 
   // ---------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------
-  var win =
-    thisObj instanceof Panel ? thisObj : new Window("palette", TITLE, undefined, { resizeable: true });
+  var win = thisObj instanceof Panel ? thisObj : new Window("palette", TITLE, undefined, { resizeable: true });
   win.orientation = "column";
   win.alignChildren = ["fill", "top"];
 
@@ -210,45 +313,104 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   var listPanel = win.add("panel", undefined, "項目");
   listPanel.alignChildren = ["fill", "top"];
   var lb = listPanel.add("listbox", undefined, [], { multiselect: false });
-  lb.preferredSize = [260, 140];
+  lb.preferredSize = [280, 180];
+  var rowAdd = listPanel.add("group");
+  var typeNames = [];
+  for (var t = 0; t < TYPES.length; t++) typeNames.push(TYPES[t].label);
+  var ddType = rowAdd.add("dropdownlist", undefined, typeNames);
+  ddType.selection = 0;
+  var btnAdd = rowAdd.add("button", undefined, "追加");
   var rowBtns = listPanel.add("group");
-  var btnAddSlider = rowBtns.add("button", undefined, "+スライダー");
-  var btnAddColor = rowBtns.add("button", undefined, "+カラー");
-  var rowBtns2 = listPanel.add("group");
-  var btnUp = rowBtns2.add("button", undefined, "↑");
-  var btnDown = rowBtns2.add("button", undefined, "↓");
-  var btnRemove = rowBtns2.add("button", undefined, "削除");
+  var btnUp = rowBtns.add("button", undefined, "↑");
+  var btnDown = rowBtns.add("button", undefined, "↓");
+  var btnDup = rowBtns.add("button", undefined, "複製");
+  var btnRemove = rowBtns.add("button", undefined, "削除");
+  btnUp.preferredSize.width = btnDown.preferredSize.width = 36;
 
+  // --- 選択中の項目の編集欄 ---
   var edit = win.add("panel", undefined, "選択中の項目");
   edit.alignChildren = ["fill", "top"];
   var rowPName = edit.add("group");
   rowPName.add("statictext", undefined, "名前");
   var etPName = rowPName.add("edittext", undefined, "");
   etPName.characters = 20;
+  var rowFlags = edit.add("group");
+  var cbInvisible = rowFlags.add("checkbox", undefined, "非表示");
+  var cbHold = rowFlags.add("checkbox", undefined, "停止キーフレーム");
 
-  var sliderGroup = edit.add("group");
-  sliderGroup.orientation = "column";
-  sliderGroup.alignChildren = ["fill", "top"];
-  function numberRow(parent, label) {
+  var stack = edit.add("group");
+  stack.orientation = "stack";
+  stack.alignChildren = ["fill", "top"];
+
+  function page() {
+    var g = stack.add("group");
+    g.orientation = "column";
+    g.alignChildren = ["fill", "top"];
+    g.visible = false;
+    return g;
+  }
+
+  function field(parent, label, chars) {
     var g = parent.add("group");
     var st = g.add("statictext", undefined, label);
     st.preferredSize.width = 110;
     var et = g.add("edittext", undefined, "0");
-    et.characters = 8;
+    et.characters = chars || 8;
     return et;
   }
-  var etValue = numberRow(sliderGroup, "初期値");
-  var etSMin = numberRow(sliderGroup, "スライダー最小");
-  var etSMax = numberRow(sliderGroup, "スライダー最大");
-  var etVMin = numberRow(sliderGroup, "有効最小");
-  var etVMax = numberRow(sliderGroup, "有効最大");
 
-  var colorGroup = edit.add("group");
-  colorGroup.add("statictext", undefined, "初期色 RGB");
-  var etR = colorGroup.add("edittext", undefined, "255");
-  var etG = colorGroup.add("edittext", undefined, "255");
-  var etB = colorGroup.add("edittext", undefined, "255");
-  etR.characters = etG.characters = etB.characters = 4;
+  function fields(parent, label, count) {
+    var g = parent.add("group");
+    var st = g.add("statictext", undefined, label);
+    st.preferredSize.width = 110;
+    var list = [];
+    for (var i = 0; i < count; i++) {
+      var et = g.add("edittext", undefined, "0");
+      et.characters = 5;
+      list.push(et);
+    }
+    return list;
+  }
+
+  var pages = {};
+  var ui = {};
+
+  pages.slider = page();
+  ui.slValue = field(pages.slider, "初期値");
+  ui.slSMin = field(pages.slider, "スライダー最小");
+  ui.slSMax = field(pages.slider, "スライダー最大");
+  ui.slVMin = field(pages.slider, "有効最小");
+  ui.slVMax = field(pages.slider, "有効最大");
+  ui.slPrec = field(pages.slider, "小数点以下の桁数", 3);
+  var slFlags = pages.slider.add("group");
+  ui.slPercent = slFlags.add("checkbox", undefined, "% 表示");
+  ui.slPixel = slFlags.add("checkbox", undefined, "ピクセル値");
+
+  pages.angle = page();
+  ui.angValue = field(pages.angle, "初期値（度）");
+
+  pages.checkbox = page();
+  ui.cbValue = pages.checkbox.add("checkbox", undefined, "初期値をオンにする");
+  ui.cbLabel = field(pages.checkbox, "横に出す文字", 16);
+
+  pages.color = page();
+  ui.colRGB = fields(pages.color, "初期色 RGB", 3);
+
+  pages.point = page();
+  ui.ptXY = fields(pages.point, "初期位置（%）", 2);
+
+  pages.point3d = page();
+  ui.pt3XYZ = fields(pages.point3d, "初期位置（%）", 3);
+
+  pages.popup = page();
+  ui.popItems = field(pages.popup, "項目（| 区切り）", 18);
+  ui.popValue = field(pages.popup, "初期値（番号）", 3);
+
+  pages.label = page();
+  ui.lblDim = pages.label.add("checkbox", undefined, "文字を薄く表示");
+
+  var hint = edit.add("statictext", undefined, "", { multiline: true });
+  hint.preferredSize = [260, 30];
 
   var actions = win.add("group");
   actions.orientation = "column";
@@ -260,40 +422,98 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   var btnLoad = rowFile.add("button", undefined, "設定を読み込み");
   var btnConvert = rowFile.add("button", undefined, "既存.ffxを変換");
 
-  function labelFor(p) {
-    return (p.type === "slider" ? "[スライダー] " : "[カラー] ") + p.name;
+  // --- 表示の更新 ---
+  function depthAt(index) {
+    var d = 0;
+    for (var i = 0; i < index; i++) {
+      if (state.items[i].type === "group") d++;
+      if (state.items[i].type === "groupEnd") d--;
+    }
+    return d;
   }
 
-  function selectedParam() {
-    return lb.selection ? state.params[lb.selection.index] : null;
+  function labelFor(index) {
+    var p = state.items[index];
+    var d = depthAt(index) - (p.type === "groupEnd" ? 1 : 0);
+    var indent = "";
+    for (var i = 0; i < d; i++) indent += "    ";
+    if (p.type === "groupEnd") return indent + "└ グループ終了";
+    return indent + "[" + typeLabel(p.type) + "] " + p.name + (p.invisible ? "（非表示）" : "");
+  }
+
+  function selectedItem() {
+    return lb.selection ? state.items[lb.selection.index] : null;
   }
 
   function refreshList(selectIndex) {
     lb.removeAll();
-    for (var i = 0; i < state.params.length; i++) lb.add("item", labelFor(state.params[i]));
-    if (selectIndex !== undefined && selectIndex >= 0 && selectIndex < state.params.length) {
+    for (var i = 0; i < state.items.length; i++) lb.add("item", labelFor(i));
+    if (selectIndex !== undefined && selectIndex >= 0 && selectIndex < state.items.length) {
       lb.selection = selectIndex;
     }
     refreshEditor();
   }
 
   function refreshEditor() {
-    var p = selectedParam();
-    edit.enabled = !!p;
-    sliderGroup.visible = !!p && p.type === "slider";
-    colorGroup.visible = !!p && p.type === "color";
+    var p = selectedItem();
+    for (var k in pages) if (pages.hasOwnProperty(k)) pages[k].visible = !!p && p.type === k;
+    edit.enabled = !!p && p.type !== "groupEnd";
+    hint.text = "";
     if (!p) return;
+
     etPName.text = p.name;
-    if (p.type === "slider") {
-      etValue.text = p.value;
-      etSMin.text = p.sliderMin;
-      etSMax.text = p.sliderMax;
-      etVMin.text = p.validMin;
-      etVMax.text = p.validMax;
-    } else {
-      etR.text = p.value[0];
-      etG.text = p.value[1];
-      etB.text = p.value[2];
+    cbInvisible.visible = !!HIDEABLE[p.type];
+    cbHold.visible = !!HOLDABLE[p.type];
+    cbInvisible.value = !!p.invisible;
+    cbHold.value = !!p.hold;
+    var v = p.value;
+
+    switch (p.type) {
+      case "slider":
+        ui.slValue.text = v;
+        ui.slSMin.text = p.sliderMin;
+        ui.slSMax.text = p.sliderMax;
+        ui.slVMin.text = p.validMin;
+        ui.slVMax.text = p.validMax;
+        ui.slPrec.text = p.precision || 0;
+        ui.slPercent.value = !!p.percent;
+        ui.slPixel.value = !!p.pixel;
+        break;
+      case "angle":
+        ui.angValue.text = v;
+        hint.text = "1回転 = 360 度（例: 1回転と45度 → 405）";
+        break;
+      case "checkbox":
+        ui.cbValue.value = !!v;
+        ui.cbLabel.text = p.label || "";
+        break;
+      case "color":
+        for (var i = 0; i < 3; i++) ui.colRGB[i].text = v[i];
+        break;
+      case "point":
+        ui.ptXY[0].text = v[0];
+        ui.ptXY[1].text = v[1];
+        hint.text = "レイヤーの幅・高さに対する % で指定します（50, 50 で中央）。";
+        break;
+      case "point3d":
+        for (var j = 0; j < 3; j++) ui.pt3XYZ[j].text = v[j];
+        hint.text = "レイヤーの幅・高さに対する % で指定します。";
+        break;
+      case "popup":
+        ui.popItems.text = p.items.join("|");
+        ui.popValue.text = v;
+        hint.text = "初期値は 1 から数えた番号です。";
+        break;
+      case "layer":
+        hint.text = "初期値は「なし」になります。";
+        break;
+      case "label":
+        ui.lblDim.value = !!p.dim;
+        hint.text = "名前がそのまま見出しとして表示されます。";
+        break;
+      case "group":
+        hint.text = "この下から「グループ終了」までがグループの中身です。";
+        break;
     }
   }
 
@@ -309,39 +529,115 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   }
 
   function byte(et) {
-    var v = Math.round(num(et));
-    return Math.max(0, Math.min(255, v));
+    return Math.max(0, Math.min(255, Math.round(num(et))));
   }
 
+  // 編集欄 → データ
   function applyEditor() {
-    var p = selectedParam();
-    if (!p) return;
+    var p = selectedItem();
+    if (!p || p.type === "groupEnd") return;
     p.name = etPName.text;
-    if (p.type === "slider") {
-      p.value = num(etValue);
-      p.sliderMin = num(etSMin);
-      p.sliderMax = num(etSMax);
-      p.validMin = num(etVMin);
-      p.validMax = num(etVMax);
-    } else {
-      p.value = [byte(etR), byte(etG), byte(etB)];
+    if (HIDEABLE[p.type]) p.invisible = cbInvisible.value;
+    if (HOLDABLE[p.type]) p.hold = cbHold.value;
+
+    switch (p.type) {
+      case "slider":
+        p.value = num(ui.slValue);
+        p.sliderMin = num(ui.slSMin);
+        p.sliderMax = num(ui.slSMax);
+        p.validMin = num(ui.slVMin);
+        p.validMax = num(ui.slVMax);
+        p.precision = Math.max(0, Math.min(6, Math.round(num(ui.slPrec))));
+        p.percent = ui.slPercent.value;
+        p.pixel = ui.slPixel.value;
+        break;
+      case "angle":
+        p.value = num(ui.angValue);
+        break;
+      case "checkbox":
+        p.value = ui.cbValue.value;
+        p.label = ui.cbLabel.text;
+        break;
+      case "color":
+        p.value = [byte(ui.colRGB[0]), byte(ui.colRGB[1]), byte(ui.colRGB[2])];
+        break;
+      case "point":
+        p.value = [num(ui.ptXY[0]), num(ui.ptXY[1])];
+        break;
+      case "point3d":
+        p.value = [num(ui.pt3XYZ[0]), num(ui.pt3XYZ[1]), num(ui.pt3XYZ[2])];
+        break;
+      case "popup":
+        p.items = ui.popItems.text.split("|");
+        p.value = Math.round(num(ui.popValue));
+        break;
+      case "label":
+        p.dim = ui.lblDim.value;
+        break;
     }
-    lb.selection.text = labelFor(p);
+    lb.selection.text = labelFor(lb.selection.index);
   }
 
-  function addParam(p) {
-    state.params.push(p);
-    refreshList(state.params.length - 1);
+  function insertAt() {
+    return lb.selection ? lb.selection.index + 1 : state.items.length;
+  }
+
+  function addItem() {
+    var type = TYPES[ddType.selection.index].type;
+    var at = insertAt();
+    state.items.splice(at, 0, newItem(type));
+    if (type === "group") state.items.splice(at + 1, 0, { type: "groupEnd", name: "" });
+    refreshList(at);
+  }
+
+  function duplicateItem() {
+    var p = selectedItem();
+    if (!p || p.type === "group" || p.type === "groupEnd") return;
+    var copy = eval(p.toSource());
+    copy.name = p.name + "_copy";
+    var at = lb.selection.index + 1;
+    state.items.splice(at, 0, copy);
+    refreshList(at);
+  }
+
+  // グループを消すときは、中身は残して「グループ終了」も一緒に消す
+  function removeItem() {
+    if (!lb.selection) return;
+    var i = lb.selection.index;
+    var p = state.items[i];
+    if (p.type === "group" || p.type === "groupEnd") {
+      var d = 0;
+      var j;
+      if (p.type === "group") {
+        for (j = i; j < state.items.length; j++) {
+          if (state.items[j].type === "group") d++;
+          if (state.items[j].type === "groupEnd" && --d === 0) break;
+        }
+        state.items.splice(j, 1);
+        state.items.splice(i, 1);
+      } else {
+        for (j = i; j >= 0; j--) {
+          if (state.items[j].type === "groupEnd") d++;
+          if (state.items[j].type === "group" && --d === 0) break;
+        }
+        state.items.splice(i, 1);
+        state.items.splice(j, 1);
+        i = j;
+      }
+    } else {
+      state.items.splice(i, 1);
+    }
+    refreshList(Math.min(i, state.items.length - 1));
   }
 
   function move(delta) {
     if (!lb.selection) return;
     var i = lb.selection.index;
     var j = i + delta;
-    if (j < 0 || j >= state.params.length) return;
-    var t = state.params[i];
-    state.params[i] = state.params[j];
-    state.params[j] = t;
+    if (j < 0 || j >= state.items.length) return;
+    var t = state.items[i];
+    state.items[i] = state.items[j];
+    state.items[j] = t;
     refreshList(j);
   }
 
@@ -352,26 +648,23 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     state.matchName = etMatch.text;
   };
   lb.onChange = refreshEditor;
-  btnAddSlider.onClick = function () {
-    addParam(newSlider());
-  };
-  btnAddColor.onClick = function () {
-    addParam(newColor());
-  };
+  btnAdd.onClick = addItem;
+  btnDup.onClick = duplicateItem;
   btnUp.onClick = function () {
     move(-1);
   };
   btnDown.onClick = function () {
     move(1);
   };
-  btnRemove.onClick = function () {
-    if (!lb.selection) return;
-    var i = lb.selection.index;
-    state.params.splice(i, 1);
-    refreshList(Math.min(i, state.params.length - 1));
-  };
-  var editors = [etPName, etValue, etSMin, etSMax, etVMin, etVMax, etR, etG, etB];
+  btnRemove.onClick = removeItem;
+
+  var editors = [
+    etPName, ui.slValue, ui.slSMin, ui.slSMax, ui.slVMin, ui.slVMax, ui.slPrec, ui.angValue, ui.cbLabel,
+    ui.popItems, ui.popValue
+  ].concat(ui.colRGB, ui.ptXY, ui.pt3XYZ);
   for (var k = 0; k < editors.length; k++) editors[k].onChange = applyEditor;
+  var toggles = [cbInvisible, cbHold, ui.slPercent, ui.slPixel, ui.cbValue, ui.lblDim];
+  for (var m = 0; m < toggles.length; m++) toggles[m].onClick = applyEditor;
 
   function guarded(fn) {
     return function () {
