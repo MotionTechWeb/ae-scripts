@@ -96,4 +96,8 @@ const other = toBuf(ctx.CK_FFXWriter.build({
 check("別の定義でもチャンク構造が正しい", walk(other, 0, other.length));
 check("内部名が入っている", other.includes(Buffer.from("Pseudo/CK Test-0002")));
 
+const webBuild = require("child_process").spawnSync(process.execPath,
+  [require("path").join(__dirname, "..", "..", "..", "tools", "ctrlkit-web", "build.js"), "--check"], { encoding: "utf8" });
+check("Web 版（tools/ctrlkit-web/ctrlkit.html）が最新", webBuild.status === 0, webBuild.stderr.trim());
+
 process.exit(failed ? 1 : 0);

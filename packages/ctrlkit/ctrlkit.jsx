@@ -351,7 +351,6 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   rowMatch.add("statictext", undefined, "内部名");
   var etMatch = rowMatch.add("edittext", undefined, "");
   etMatch.characters = 20;
-  etMatch.helpTip = "空欄なら「" + MATCHNAME_PREFIX + "名前」になります。先頭に「Pseudo/」が無ければ自動で付けます。ほかの疑似エフェクトと重ならない名前にしてください。";
 
   var listPanel = right.add("panel", undefined, "項目");
   listPanel.alignChildren = ["fill", "top"];

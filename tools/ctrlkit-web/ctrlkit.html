@@ -1,0 +1,1185 @@
+<!doctype html>
+<!-- このファイルは build.js が生成しています。編集は template.html へ。 -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CtrlKit Web</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --panel: #262626;
+    --panel-2: #2e2e2e;
+    --line: #3a3a3a;
+    --text: #d6d6d6;
+    --muted: #8a8a8a;
+    --accent: #2d8ceb;
+    --value: #3a9bff;
+    --danger: #e0625a;
+    --field: #1a1a1a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); }
+  main {
+    display: grid; grid-template-columns: minmax(280px, 380px) minmax(320px, 1fr);
+    gap: 16px; padding: 16px; max-width: 1100px;
+  }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; padding: 12px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  section + section { margin-top: 12px; }
+  h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 8px; letter-spacing: .04em; }
+  label.row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+  .multi { display: flex; gap: 6px; }
+  input[type=text], input[type=number], select {
+    width: 100%; background: var(--field); color: var(--text);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px; font: inherit;
+  }
+  input:focus, select:focus, button:focus-visible { outline: 1px solid var(--accent); }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: #555; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  /* 項目一覧 */
+  ul.items { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 4px; max-height: 260px; overflow: auto; background: var(--field); }
+  ul.items li { padding: 4px 8px; cursor: pointer; white-space: nowrap; }
+  ul.items li:hover { background: #2a2a2a; }
+  ul.items li.sel { background: #22446b; }
+  ul.items li .type { color: var(--muted); }
+  ul.items li.end { color: var(--muted); }
+
+  /* プレビュー（エフェクトコントロール風） */
+  .fx { background: #232323; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+  .fx-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  .fx-head .badge { font-style: italic; color: var(--muted); }
+  .fx-head .reset { margin-left: auto; color: var(--value); }
+  .fx-row { display: grid; grid-template-columns: 14px 16px 120px 1fr; align-items: center; gap: 4px; min-height: 26px; padding: 2px 8px; border-bottom: 1px solid #2c2c2c; cursor: pointer; }
+  .fx-row.sel { background: #2b3440; }
+  .fx-row.hidden { opacity: .4; }
+  .fx-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fx-row .val { color: var(--value); display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .fx-row .dim { color: var(--muted); }
+  .fx-row input[type=range] { width: 100%; max-width: 160px; accent-color: #aaa; }
+  .swatch { width: 38px; height: 14px; border: 1px solid #777; border-radius: 2px; }
+  .fx-row select { width: auto; padding: 1px 4px; }
+  svg { display: block; }
+
+  .errors { color: var(--danger); margin: 8px 0 0; padding-left: 18px; }
+  textarea.code { width: 100%; height: 140px; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 4px; font: 11px/1.4 ui-monospace, Consolas, monospace; padding: 6px; }
+  .file { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CtrlKit Web</h1>
+  <span class="sub">疑似エフェクトの .ffx と、スクリプト埋め込み用コードを作ります</span>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>プレビュー</h2>
+      <div class="fx" id="preview"></div>
+      <p class="hint">スライダー・チェックボックス・ドロップダウンは、ここで動かすと初期値になります。行をクリックすると右で編集できます。</p>
+    </section>
+    <section>
+      <h2>書き出し</h2>
+      <div class="toolbar">
+        <button class="primary" id="dlFfx">.ffx をダウンロード</button>
+        <button id="dlJsx">埋め込みコード（_ffx.jsx）</button>
+        <button id="dlJson">設定（.ck.json）</button>
+      </div>
+      <div class="toolbar">
+        <button id="loadJson">設定を読み込み</button>
+        <button id="convertFfx">既存 .ffx を変換</button>
+        <button id="copyCode">埋め込みコードをコピー</button>
+      </div>
+      <ul class="errors" id="errors"></ul>
+      <input type="file" class="file" id="fileJson" accept=".json">
+      <input type="file" class="file" id="fileFfx" accept=".ffx">
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>エフェクト</h2>
+      <label class="row">名前 <input type="text" id="effName"></label>
+      <label class="row">内部名 <input type="text" id="effMatch" placeholder="空欄なら Pseudo/CK 名前"></label>
+      <p class="hint">内部名は「Pseudo/」で始まる必要があります（無ければ自動で付けます）。項目を変えて書き出し直すときは、内部名も変えてください。</p>
+    </section>
+
+    <section>
+      <h2>項目</h2>
+      <ul class="items" id="items"></ul>
+      <div class="toolbar">
+        <select id="addType" style="width:auto"></select>
+        <button id="add">追加</button>
+        <button id="up" title="上へ">↑</button>
+        <button id="down" title="下へ">↓</button>
+        <button id="dup">複製</button>
+        <button id="del">削除</button>
+      </div>
+    </section>
+
+    <section id="editor">
+      <h2>選択中の項目</h2>
+      <div id="editorBody"></div>
+    </section>
+  </div>
+</main>
+
+<!-- packages/ctrlkit/src/binary.jsxinc -->
+<script>
+/*
+ * バイト列（0〜255の文字からなる文字列）を組み立てるための小さなヘルパー。
+ * ExtendScript（ES3）と Node の両方で動くように書いている。
+ * .ffx は RIFX（ビッグエンディアンの RIFF）形式。
+ */
+var CK_Binary = (function () {
+  function u8(n) {
+    return String.fromCharCode(n & 0xff);
+  }
+
+  function u16(n) {
+    return u8(n >>> 8) + u8(n);
+  }
+
+  function u32(n) {
+    return u8(n >>> 24) + u8(n >>> 16) + u8(n >>> 8) + u8(n);
+  }
+
+  function zeros(len) {
+    var s = "";
+    for (var i = 0; i < len; i++) s += "\x00";
+    return s;
+  }
+
+  // 固定長の文字列（ASCII）。足りない分は 0 で埋める
+  function fixedString(str, len) {
+    var s = str.length > len ? str.substring(0, len) : str;
+    return s + zeros(len - s.length);
+  }
+
+  // 16進文字列（"00ff..."）をバイト列に
+  function fromHex(hex) {
+    var s = "";
+    hex = hex.replace(/\s+/g, "");
+    for (var i = 0; i < hex.length; i += 2) {
+      s += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return s;
+  }
+
+  // IEEE754 倍精度（ビッグエンディアン）
+  function f64(value) {
+    if (value === 0) return zeros(8);
+    var sign = value < 0 ? 1 : 0;
+    var v = Math.abs(value);
+    var exp = Math.floor(Math.log(v) / Math.LN2);
+    if (v / Math.pow(2, exp) < 1) exp--;
+    if (v / Math.pow(2, exp) >= 2) exp++;
+    var mant = v / Math.pow(2, exp) - 1; // [0,1)
+    var hi = Math.floor(mant * 0x100000); // 上位20ビット
+    var lo = Math.round((mant * 0x100000 - hi) * 0x100000000); // 下位32ビット
+    if (lo >= 0x100000000) {
+      lo = 0;
+      hi++;
+    }
+    var e = exp + 1023;
+    var word1 = sign * 0x80000000 + e * 0x100000 + hi;
+    return u32(word1) + u32(lo);
+  }
+
+  // IEEE754 単精度（ビッグエンディアン）
+  function f32(value) {
+    if (value === 0) return zeros(4);
+    var sign = value < 0 ? 1 : 0;
+    var v = Math.abs(value);
+    var exp = Math.floor(Math.log(v) / Math.LN2);
+    if (v / Math.pow(2, exp) < 1) exp--;
+    if (v / Math.pow(2, exp) >= 2) exp++;
+    var mant = Math.round((v / Math.pow(2, exp) - 1) * 0x800000);
+    if (mant >= 0x800000) {
+      mant = 0;
+      exp++;
+    }
+    return u32(sign * 0x80000000 + (exp + 127) * 0x800000 + mant);
+  }
+
+  // チャンク: tag(4) + size(4) + body + 奇数長なら 1 バイトのパディング
+  function chunk(tag, body) {
+    return tag + u32(body.length) + body + (body.length & 1 ? "\x00" : "");
+  }
+
+  function list(type, children) {
+    return chunk("LIST", type + children);
+  }
+
+  return {
+    u8: u8,
+    u16: u16,
+    u32: u32,
+    f32: f32,
+    f64: f64,
+    zeros: zeros,
+    fixedString: fixedString,
+    fromHex: fromHex,
+    chunk: chunk,
+    list: list
+  };
+})();
+
+</script>
+<!-- packages/ctrlkit/src/ffx-writer.jsxinc -->
+<script>
+/*
+ * 疑似エフェクトの定義から .ffx（アニメーションプリセット）のバイト列を作る。
+ * 事前に binary.jsxinc を読み込んでおくこと。
+ *
+ * 定義の例:
+ * {
+ *   name: "Zabuton",               // エフェクトコントロールに表示される名前
+ *   matchName: "Pseudo/Zabuton",   // 内部名。エフェクトごとに固有にする
+ *   params: [
+ *     { type: "slider", name: "Padding", validMin: 0, validMax: 5000,
+ *       sliderMin: 0, sliderMax: 5000, value: 0, precision: 0 },
+ *     { type: "color", name: "BG_Color", value: [255, 0, 0] },
+ *     { type: "group", name: "Detail", params: [ ... ] }
+ *   ]
+ * }
+ *
+ * 項目の種類と設定（共通: name, invisible, hold）
+ *   slider   : value, sliderMin, sliderMax, validMin, validMax, precision, percent, pixel
+ *   angle    : value（度。1回転=360）
+ *   checkbox : value（true/false）, label（チェックボックス横の文字）
+ *   color    : value（[R, G, B] 0〜255）
+ *   point    : value（[X, Y] レイヤーサイズに対する%）
+ *   point3d  : value（[X, Y, Z] レイヤーサイズに対する%）
+ *   popup    : items（["A", "B"]）, value（1から数えた番号）
+ *   layer    : （初期値は「なし」）
+ *   label    : dim（文字を薄く表示）
+ *   group    : params（中に入れる項目）
+ *
+ * バイナリの意味は、AE が書き出した .ffx を読み解いて合わせている。
+ * 意味が分かっていないバイトは見本の値をそのまま使う。
+ */
+var CK_FFXWriter = (function (B) {
+  // --- 見本からそのまま使っている固定値 -------------------------------
+  var HEAD = "00000003 00000044 00000001 01000000";
+  var BESO =
+    "00000001 00000001 00000000 00005da8 001df852 00000000 00640064 00640064" +
+    "3ff00000 00000000 3ff00000 00000000 00000000 ffffffff";
+
+  // tdb4（ストリームの設定, 124バイト）。{H} は Hold キーフレームのフラグが入る位置
+  var TDB4_ROOT =
+    "db990001 00010000 00010000 00000258 3f1a36e2 eb1c432d 3ff00000 00000000" +
+    "3ff00000 00000000 3ff00000 00000000 3ff00000 00000000 00000004 04c0c0c0" +
+    "ffc0c0c0 00000000 80000000";
+  var TDB4_SIMPLE = "bd990001 00010000 0001{H} 00005da8";
+  var TDB4_COLOR = "bd990004 00070001 0002ff{h}00005da8";
+  var TDB4_DISCRETE =
+    "db990001 00010000 0001{H} 00005da8 3f1a36e2 eb1c432d 3ff00000 00000000" +
+    "3ff00000 00000000 3ff00000 00000000 3ff00000 00000000 00000004 04000000";
+  var TDB4_POINT =
+    "db990002 000f0003 ffffffff 00005da8 3d9b7cdf d9d7bdbc 3ff00000 00000000" +
+    "3ff00000 00000000 3ff00000 00000000 3ff00000 00000000 00000004 06000000" +
+    "00000000 00000000 00000000 00000001";
+  var TDB4_POINT3D =
+    "db990003 000f0003 ffffffff 00005da8 3d9b7cdf d9d7bdbc 3ff00000 00000000" +
+    "3ff00000 00000000 3ff00000 00000000 3ff00000 00000000 00000008 09000000" +
+    "00000000 00000000 00000000 00000001";
+
+  // pard の種類コード
+  var PARD_TYPE = {
+    layer: 0x00,
+    angle: 0x03,
+    checkbox: 0x04,
+    color: 0x05,
+    point: 0x06,
+    popup: 0x07,
+    slider: 0x0a,
+    groupStart: 0x0d,
+    groupEnd: 0x0e,
+    point3d: 0x12
+  };
+
+  var FLAG_DIM = 0x20; // ラベルの文字を薄く表示
+  var FLAG_INVISIBLE_IN_GROUP = 0x200; // グループ内の非表示項目（見本ではグループ内だけに付いていた）
+  var TDPI_GROUP = 0x0e;
+
+  // 点の現在値（cdat）はピクセルで保存される。% からの換算に使う基準サイズ
+  var POINT_REF = [1920, 1080];
+
+  function hex(h) {
+    return B.fromHex(h);
+  }
+
+  function pad(bytes, len) {
+    return bytes + B.zeros(len - bytes.length);
+  }
+
+  function fixed(v) {
+    // 16.16 固定小数
+    return B.u32(Math.round(v * 65536) >>> 0);
+  }
+
+  function tdmn(matchName) {
+    return B.chunk("tdmn", B.fixedString(matchName, 40));
+  }
+
+  function tdsn(name) {
+    return B.chunk("tdsn", name + "\x00");
+  }
+
+  function paramMatchName(def, index) {
+    var n = "000" + index;
+    return def.matchName + "-" + n.substring(n.length - 4);
+  }
+
+  function tdb4(template, hold) {
+    var s = template.replace("{H}", hold ? "0004" : "00ff").replace("{h}", hold ? "04 " : "ff ");
+    return B.chunk("tdb4", pad(hex(s), 124));
+  }
+
+  function cdat(values, len) {
+    var s = "";
+    for (var i = 0; i < values.length; i++) s += B.f64(values[i]);
+    return B.chunk("cdat", pad(s, len));
+  }
+
+  // --- 定義を AE の並び（グループは開始／終了の2項目）に展開する ---------
+  function flatten(params, out, depth) {
+    depth = depth || 0;
+    for (var i = 0; i < params.length; i++) {
+      var p = params[i];
+      if (p.type === "group") {
+        out.push({ kind: "groupStart", p: p, depth: depth });
+        flatten(p.params || [], out, depth + 1);
+        out.push({ kind: "groupEnd", p: p });
+      } else if (p.type === "label") {
+        out.push({ kind: "label", p: p });
+        out.push({ kind: "groupEnd", p: p });
+      } else {
+        out.push({ kind: p.type, p: p, depth: depth });
+      }
+    }
+    return out;
+  }
+
+  // --- pard: 項目の定義（148バイト） ---------------------------------
+  function pard(item) {
+    var p = item.p;
+    var kind = item.kind;
+    var flags = kind === "label" && p.dim ? FLAG_DIM : 0;
+    if (p.invisible && item.depth > 0 && kind !== "groupEnd") flags |= FLAG_INVISIBLE_IN_GROUP;
+    var type = kind === "label" ? PARD_TYPE.groupStart : PARD_TYPE[kind];
+    if (type === undefined) throw new Error("未対応の種類です: " + kind);
+    var name = kind === "groupEnd" ? "" : p.name;
+    var s = B.zeros(4) + B.u32(flags) + B.zeros(4) + B.u32(type) + B.fixedString(name, 32); // 0-47
+    var v = p.value;
+
+    if (kind === "slider") {
+      s += B.zeros(104 - 48);
+      s += B.f32(p.validMin) + B.f32(p.validMax) + B.f32(p.sliderMin) + B.f32(p.sliderMax);
+      s += B.f32(v || 0);
+      s += B.u16(p.precision || 0) + B.u16((p.percent ? 1 : 0) | (p.pixel ? 2 : 0));
+    } else if (kind === "angle") {
+      s += B.zeros(12) + fixed(v || 0);
+    } else if (kind === "checkbox") {
+      s += B.zeros(12) + B.u8(v ? 1 : 0);
+    } else if (kind === "color") {
+      s += B.zeros(8) + hex("0000ffff") + B.u8(255) + B.u8(v[0]) + B.u8(v[1]) + B.u8(v[2]);
+    } else if (kind === "point") {
+      // 56,60: 割合（1.0 = 100%）, 68,72: %（どちらも 16.16 固定小数）
+      s += B.zeros(8) + fixed(v[0] / 100) + fixed(v[1] / 100) + B.zeros(4) + fixed(v[0]) + fixed(v[1]);
+    } else if (kind === "point3d") {
+      s += B.zeros(8);
+      s += B.f64(v[0] / 100) + B.f64(v[1] / 100) + B.f64(v[2] / 100);
+      s += B.f64(v[0]) + B.f64(v[1]) + B.f64(v[2]);
+    } else if (kind === "popup") {
+      s += B.zeros(8) + B.u32(v) + B.u16(p.items.length) + B.u16(v);
+    } else if (kind === "layer") {
+      s += B.u32(2);
+    }
+
+    var out = B.chunk("pard", pad(s, 148));
+    if (kind === "checkbox") out += B.chunk("pdnm", (p.label || "") + "\x00");
+    if (kind === "popup") out += B.chunk("pdnm", p.items.join("|") + "\x00");
+    return out;
+  }
+
+  function rootPard() {
+    return B.chunk(
+      "pard",
+      pad(B.zeros(48) + B.u32(2) + B.zeros(4) + B.u32(0x0e) + B.zeros(68) + B.u32(0xffffffff), 148)
+    );
+  }
+
+  // --- tdbs: 項目の現在値 ---------------------------------------------
+  function tdbs(item, def) {
+    var p = item.p;
+    var kind = item.kind;
+    var v = p.value;
+    var hidden = kind !== "groupEnd" && p.invisible;
+    var body = B.chunk("tdsb", B.u32(hidden ? 3 : 1));
+    body += tdsn(kind === "groupEnd" ? def.name : p.name);
+
+    if (kind === "slider") {
+      body += tdb4(TDB4_SIMPLE, p.hold) + cdat([v || 0], 40);
+      body += B.chunk("tdum", B.f64(p.sliderMin)) + B.chunk("tduM", B.f64(p.sliderMax));
+    } else if (kind === "angle") {
+      body += tdb4(TDB4_SIMPLE, p.hold) + cdat([v || 0], 40);
+    } else if (kind === "checkbox") {
+      body += tdb4(TDB4_DISCRETE, p.hold) + cdat([v ? 1 : 0], 40);
+    } else if (kind === "color") {
+      body += tdb4(TDB4_COLOR, p.hold) + cdat([255, v[0], v[1], v[2]], 96);
+    } else if (kind === "point") {
+      var cur = p.current || [(POINT_REF[0] * v[0]) / 100, (POINT_REF[1] * v[1]) / 100];
+      body += tdb4(TDB4_POINT) + cdat(cur, 48);
+    } else if (kind === "point3d") {
+      var cur3 = p.current || [
+        (POINT_REF[0] * v[0]) / 100,
+        (POINT_REF[1] * v[1]) / 100,
+        (POINT_REF[1] * v[2]) / 100
+      ];
+      body += tdb4(TDB4_POINT3D) + cdat(cur3, 72);
+    } else if (kind === "popup") {
+      body += tdb4(TDB4_DISCRETE, p.hold) + cdat([v], 40);
+    } else if (kind === "layer") {
+      body += tdb4(TDB4_DISCRETE, p.hold) + cdat([], 40) + B.chunk("tdpi", B.u32(0));
+    } else if (kind === "groupStart" || kind === "label") {
+      body += tdb4(TDB4_SIMPLE, true) + cdat([], 40);
+    } else if (kind === "groupEnd") {
+      body += tdb4(TDB4_SIMPLE, true) + cdat([], 40) + B.chunk("tdpi", B.u32(TDPI_GROUP));
+    }
+    return B.list("tdbs", body);
+  }
+
+  function rootTdbs() {
+    return B.list(
+      "tdbs",
+      B.chunk("tdsb", B.u32(3)) +
+        tdsn("") +
+        B.chunk("tdb4", pad(hex(TDB4_ROOT), 124)) +
+        cdat([], 40) +
+        B.chunk("tdpi", B.u32(TDPI_GROUP))
+    );
+  }
+
+  function effectPath(def) {
+    return B.list(
+      "tdsp",
+      B.chunk("tdot", B.u32(0xffffffff)) +
+        B.chunk("tdpl", B.u32(2)) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0xffffffff)) + tdmn("ADBE Effect Parade")) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0)) + tdmn(def.matchName))
+    );
+  }
+
+  function endPath() {
+    return B.list(
+      "tdsp",
+      B.chunk("tdot", B.u32(0xffffffff)) +
+        B.chunk("tdpl", B.u32(1)) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0xffffffff)) + tdmn("ADBE End of path sentinel"))
+    );
+  }
+
+  function build(def) {
+    var items = flatten(def.params, []);
+    var i;
+
+    var parT = B.chunk("parn", B.u32(items.length + 1));
+    parT += tdmn(paramMatchName(def, 0)) + rootPard();
+    for (i = 0; i < items.length; i++) {
+      parT += tdmn(paramMatchName(def, i + 1)) + pard(items[i]);
+    }
+
+    var tdgp = B.chunk("tdsb", B.u32(1)) + tdsn(def.name);
+    tdgp += tdmn(paramMatchName(def, 0)) + rootTdbs();
+    for (i = 0; i < items.length; i++) {
+      tdgp += tdmn(paramMatchName(def, i + 1)) + tdbs(items[i], def);
+    }
+    tdgp += tdmn("ADBE Group End");
+
+    var sspc = B.chunk("fnam", B.zeros(48)) + B.list("parT", parT) + B.list("tdgp", tdgp);
+    var besc =
+      B.chunk("beso", hex(BESO)) + effectPath(def) + tdsn(def.name) + endPath() + B.list("sspc", sspc);
+
+    return B.chunk("RIFX", "FaFX" + B.chunk("head", hex(HEAD)) + B.list("besc", besc));
+  }
+
+  return { build: build, flatten: flatten };
+})(CK_Binary);
+
+</script>
+<!-- packages/ctrlkit/src/embed.jsxinc -->
+<script>
+/*
+ * .ffx のバイト列を、スクリプトに貼り付けられる文字列リテラルと適用関数に変換する。
+ * 出力したコードは zabuton.jsx と同じ仕組み（一時フォルダに書き出して applyPreset）で動く。
+ */
+var CK_Embed = (function () {
+  var LINE_WIDTH = 100;
+
+  function escapeByte(code) {
+    if (code === 0x22) return '\\"';
+    if (code === 0x5c) return "\\\\";
+    if (code >= 0x20 && code < 0x7f) return String.fromCharCode(code);
+    var h = code.toString(16);
+    return "\\x" + (h.length < 2 ? "0" + h : h);
+  }
+
+  // var NAME = "...." + "...."; の形にする
+  function toStringLiteral(bytes, varName) {
+    var lines = [];
+    var cur = "";
+    for (var i = 0; i < bytes.length; i++) {
+      cur += escapeByte(bytes.charCodeAt(i) & 0xff);
+      if (cur.length >= LINE_WIDTH) {
+        lines.push(cur);
+        cur = "";
+      }
+    }
+    if (cur.length) lines.push(cur);
+    return "var " + varName + " =\n  \"" + lines.join("\" +\n  \"") + "\";\n";
+  }
+
+  // 文字列リテラル＋適用関数のスニペット
+  // opts: { varName, functionName, effectName }
+  function snippet(bytes, opts) {
+    var v = opts.varName;
+    var fn = opts.functionName;
+    var tmpName = fn.replace(/[^A-Za-z0-9_]/g, "_") + ".ffx";
+    return (
+      "// 疑似エフェクト「" + opts.effectName + "」（CtrlKit で生成）\n" +
+      toStringLiteral(bytes, v) +
+      "\n" +
+      "// layer に疑似エフェクトを適用し、追加されたエフェクトを返す（失敗したら null）\n" +
+      "function " + fn + "(layer) {\n" +
+      "  var f = new File(Folder.temp.fsName + \"/" + tmpName + "\");\n" +
+      "  f.encoding = \"BINARY\";\n" +
+      "  if (!f.open(\"w\")) return null;\n" +
+      "  f.write(" + v + ");\n" +
+      "  f.close();\n" +
+      "  // applyPreset は選択中のレイヤーに適用されるため、対象だけを選択する\n" +
+      "  var comp = layer.containingComp;\n" +
+      "  var selected = comp.selectedLayers;\n" +
+      "  for (var i = 0; i < selected.length; i++) selected[i].selected = false;\n" +
+      "  layer.selected = true;\n" +
+      "  var effects = layer.property(\"ADBE Effect Parade\");\n" +
+      "  var before = effects.numProperties;\n" +
+      "  layer.applyPreset(f);\n" +
+      "  f.remove();\n" +
+      "  return effects.numProperties > before ? effects.property(effects.numProperties) : null;\n" +
+      "}\n"
+    );
+  }
+
+  return { toStringLiteral: toStringLiteral, snippet: snippet };
+})();
+
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  var MATCHNAME_PREFIX = "Pseudo/CK ";
+  var MATCHNAME_MAX = 34;
+  var NAME_MAX = 31;
+
+  var TYPES = [
+    { type: "slider", label: "スライダー" },
+    { type: "angle", label: "角度" },
+    { type: "checkbox", label: "チェックボックス" },
+    { type: "color", label: "カラー" },
+    { type: "point", label: "ポイント" },
+    { type: "point3d", label: "3Dポイント" },
+    { type: "popup", label: "ドロップダウン" },
+    { type: "layer", label: "レイヤー" },
+    { type: "label", label: "ラベル" },
+    { type: "group", label: "グループ" }
+  ];
+  var HOLDABLE = { slider: 1, angle: 1, checkbox: 1, color: 1, popup: 1 };
+  var HIDEABLE = { slider: 1, checkbox: 1, color: 1, point: 1, point3d: 1, popup: 1, layer: 1, group: 1 };
+
+  var state = { name: "MyEffect", matchName: "", items: [], sel: -1 };
+
+  // ------------------------------------------------------------------
+  // 定義
+  // ------------------------------------------------------------------
+  function typeLabel(type) {
+    if (type === "groupEnd") return "グループ終了";
+    for (var i = 0; i < TYPES.length; i++) if (TYPES[i].type === type) return TYPES[i].label;
+    return type;
+  }
+
+  function newItem(type) {
+    var n = { type: type, name: type.charAt(0).toUpperCase() + type.slice(1) };
+    switch (type) {
+      case "slider": Object.assign(n, { value: 0, sliderMin: 0, sliderMax: 100, validMin: 0, validMax: 100, precision: 0 }); break;
+      case "angle": n.value = 0; break;
+      case "checkbox": n.value = false; n.label = ""; break;
+      case "color": n.value = [255, 255, 255]; break;
+      case "point": n.value = [50, 50]; break;
+      case "point3d": n.value = [50, 50, 0]; break;
+      case "popup": n.items = ["Item 1", "Item 2", "Item 3"]; n.value = 1; break;
+    }
+    return n;
+  }
+
+  function uniqueName(base) {
+    var names = {};
+    state.items.forEach(function (it) { names[it.name] = 1; });
+    if (!names[base]) return base;
+    for (var i = 2; ; i++) if (!names[base + i]) return base + i;
+  }
+
+  function normalizeMatchName(m) {
+    if (!m) return "";
+    return /^Pseudo\//.test(m) ? m : "Pseudo/" + m;
+  }
+
+  function defaultMatchName(name) {
+    return (MATCHNAME_PREFIX + name.replace(/[^A-Za-z0-9_ ]/g, "_")).slice(0, MATCHNAME_MAX);
+  }
+
+  function isAscii(s) { return /^[\x20-\x7e]*$/.test(s); }
+
+  function nest(items) {
+    var root = [], stack = [root];
+    items.forEach(function (it) {
+      if (it.type === "groupEnd") { if (stack.length > 1) stack.pop(); return; }
+      var copy = JSON.parse(JSON.stringify(it));
+      stack[stack.length - 1].push(copy);
+      if (it.type === "group") { copy.params = []; stack.push(copy.params); }
+    });
+    return root;
+  }
+
+  function unnest(params, out) {
+    params.forEach(function (p) {
+      var copy = JSON.parse(JSON.stringify(p));
+      delete copy.params;
+      out.push(copy);
+      if (p.type === "group") { unnest(p.params || [], out); out.push({ type: "groupEnd", name: "" }); }
+    });
+    return out;
+  }
+
+  function currentDefinition() {
+    return {
+      name: state.name,
+      matchName: normalizeMatchName(state.matchName) || defaultMatchName(state.name),
+      params: nest(state.items)
+    };
+  }
+
+  function validate() {
+    var errors = [], def = currentDefinition(), depth = 0, seen = {};
+    if (!def.name) errors.push("エフェクト名が空です。");
+    if (!isAscii(def.name) || def.name.length > NAME_MAX) errors.push("エフェクト名は半角英数字で" + NAME_MAX + "文字までにしてください。");
+    if (!isAscii(def.matchName) || def.matchName.length > MATCHNAME_MAX) errors.push("内部名は半角英数字で" + MATCHNAME_MAX + "文字までにしてください。");
+    if (!state.items.length) errors.push("項目が1つもありません。");
+    state.items.forEach(function (p, i) {
+      var label = (i + 1) + "番目（" + (p.name || typeLabel(p.type)) + "）: ";
+      if (p.type === "groupEnd") { if (--depth < 0) errors.push(label + "対応するグループがありません。"); return; }
+      if (p.type === "group") depth++;
+      if (!p.name || !isAscii(p.name) || p.name.length > NAME_MAX) errors.push(label + "名前は半角英数字で" + NAME_MAX + "文字までにしてください。");
+      if (seen[p.name]) errors.push(label + "名前が重複しています。");
+      seen[p.name] = true;
+      if (p.type === "slider") {
+        if (!(p.validMin <= p.sliderMin && p.sliderMin < p.sliderMax && p.sliderMax <= p.validMax))
+          errors.push(label + "範囲は 有効最小 ≦ スライダー最小 < スライダー最大 ≦ 有効最大 にしてください。");
+        if (p.value < p.validMin || p.value > p.validMax) errors.push(label + "初期値が有効範囲の外です。");
+      }
+      if (p.type === "checkbox" && !isAscii(p.label || "")) errors.push(label + "チェックボックスの文字は半角英数字にしてください。");
+      if (p.type === "popup") {
+        if (!p.items.length) errors.push(label + "ドロップダウンの項目がありません。");
+        if (p.items.some(function (s) { return !isAscii(s) || /\|/.test(s); })) errors.push(label + "ドロップダウンの項目は半角英数字で、「|」は使えません。");
+        if (p.value < 1 || p.value > p.items.length) errors.push(label + "初期値の番号が項目の数を超えています。");
+      }
+    });
+    if (depth > 0) errors.push("閉じられていないグループがあります（「グループ終了」を追加してください）。");
+    return errors;
+  }
+
+  // ------------------------------------------------------------------
+  // 書き出し
+  // ------------------------------------------------------------------
+  function toUint8(bytes) {
+    var a = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) a[i] = bytes.charCodeAt(i) & 0xff;
+    return a;
+  }
+
+  function fromArrayBuffer(buf) {
+    var a = new Uint8Array(buf), s = "";
+    for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+    return s;
+  }
+
+  function download(name, data, type) {
+    var url = URL.createObjectURL(new Blob([data], { type: type }));
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function identifierFrom(name) {
+    var id = name.replace(/[^A-Za-z0-9_]/g, "_");
+    return /^[0-9]/.test(id) ? "_" + id : id;
+  }
+
+  function snippetFor(bytes, effectName) {
+    var id = identifierFrom(effectName);
+    return CK_Embed.snippet(bytes, {
+      varName: id.toUpperCase() + "_FFX",
+      functionName: "apply" + id.charAt(0).toUpperCase() + id.slice(1),
+      effectName: effectName
+    });
+  }
+
+  function checked(fn) {
+    return function () {
+      var errors = validate();
+      showErrors(errors);
+      if (!errors.length) fn(currentDefinition());
+    };
+  }
+
+  function showErrors(errors) {
+    var ul = document.getElementById("errors");
+    ul.innerHTML = "";
+    errors.forEach(function (e) { var li = document.createElement("li"); li.textContent = e; ul.appendChild(li); });
+  }
+
+  // ------------------------------------------------------------------
+  // プレビュー
+  // ------------------------------------------------------------------
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function svg(w, h, inner) {
+    var el = document.createElementNS(SVG_NS, "svg");
+    el.setAttribute("width", w); el.setAttribute("height", h); el.setAttribute("viewBox", "0 0 " + w + " " + h);
+    el.innerHTML = inner;
+    return el;
+  }
+
+  function stopwatch() {
+    return svg(14, 14, '<g fill="none" stroke="#bbb" stroke-width="1.2"><circle cx="7" cy="8" r="5"/><path d="M5 1.5h4M7 1.5V3M7 8V5"/></g>');
+  }
+
+  function dial(deg) {
+    var a = deg * Math.PI / 180, r = 12, c = 14;
+    return svg(28, 28, '<g fill="none" stroke="#bbb" stroke-width="1.5"><circle cx="14" cy="14" r="12"/><line x1="14" y1="14" x2="' +
+      (c + (r - 2) * Math.sin(a)).toFixed(2) + '" y2="' + (c - (r - 2) * Math.cos(a)).toFixed(2) + '"/></g>');
+  }
+
+  function twirl(open) {
+    return svg(10, 10, '<path d="' + (open ? "M1 3h8L5 8z" : "M3 1v8l5-4z") + '" fill="#aaa"/>');
+  }
+
+  function angleText(v) {
+    var turns = v < 0 ? Math.ceil(v / 360) : Math.floor(v / 360);
+    var deg = v - turns * 360;
+    return turns + "x" + (deg < 0 ? "" : "+") + deg.toFixed(1) + "°";
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function renderPreview() {
+    var root = document.getElementById("preview");
+    root.innerHTML = "";
+    var head = el("div", "fx-head");
+    head.appendChild(twirl(true));
+    head.appendChild(el("span", "badge", "fx"));
+    head.appendChild(el("span", "", state.name || ""));
+    head.appendChild(el("span", "reset", "リセット"));
+    root.appendChild(head);
+
+    var depth = 0;
+    state.items.forEach(function (p, i) {
+      if (p.type === "groupEnd") { depth = Math.max(0, depth - 1); return; }
+      var row = el("div", "fx-row" + (i === state.sel ? " sel" : "") + (p.invisible ? " hidden" : ""));
+      row.style.paddingLeft = (8 + depth * 14) + "px";
+      row.addEventListener("click", function (e) {
+        if (e.target.closest("input,select")) return;
+        select(i);
+      });
+
+      var tw = el("span");
+      if (p.type === "group") tw.appendChild(twirl(true));
+      row.appendChild(tw);
+      var sw = el("span");
+      if (HOLDABLE[p.type] && p.hold) sw.appendChild(stopwatch());
+      row.appendChild(sw);
+      var name = el("span", "name" + (p.type === "label" && p.dim ? " dim" : ""), p.name + (p.invisible ? "（非表示）" : ""));
+      row.appendChild(name);
+      var val = el("span", "val");
+      row.appendChild(val);
+      fillValue(val, p, i);
+      root.appendChild(row);
+      if (p.type === "group") depth++;
+    });
+    if (!state.items.length) {
+      var empty = el("div", "fx-row", "");
+      empty.appendChild(el("span", "dim", "（項目を追加するとここに表示されます）"));
+      root.appendChild(empty);
+    }
+  }
+
+  function fillValue(val, p, i) {
+    var v = p.value;
+    switch (p.type) {
+      case "slider":
+        var fmt = function (x) { return Number(x).toFixed(p.precision || 0) + (p.percent ? "%" : ""); };
+        var txt = el("span", "", fmt(v));
+        var range = document.createElement("input");
+        range.type = "range"; range.min = p.sliderMin; range.max = p.sliderMax;
+        range.step = Math.pow(10, -(p.precision || 0)); range.value = v;
+        range.addEventListener("input", function () { txt.textContent = fmt(range.value); });
+        range.addEventListener("change", function () { p.value = Number(range.value); refreshEditorIfSel(i); });
+        val.appendChild(txt); val.appendChild(range);
+        break;
+      case "angle":
+        val.appendChild(el("span", "", angleText(v || 0)));
+        val.appendChild(dial(v || 0));
+        break;
+      case "checkbox":
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.checked = !!v;
+        cb.addEventListener("change", function () { p.value = cb.checked; refreshEditorIfSel(i); });
+        val.appendChild(cb);
+        val.appendChild(el("span", "", p.label || ""));
+        break;
+      case "color":
+        var s = el("span", "swatch");
+        s.style.background = "rgb(" + v.join(",") + ")";
+        val.appendChild(s);
+        break;
+      case "point": val.textContent = v[0] + "%, " + v[1] + "%"; break;
+      case "point3d": val.textContent = v[0] + "%, " + v[1] + "%, " + v[2] + "%"; break;
+      case "popup":
+        var sel = document.createElement("select");
+        p.items.forEach(function (t, k) { var o = document.createElement("option"); o.value = k + 1; o.textContent = t; sel.appendChild(o); });
+        sel.value = v;
+        sel.addEventListener("change", function () { p.value = Number(sel.value); refreshEditorIfSel(i); });
+        val.appendChild(sel);
+        break;
+      case "layer":
+        var ls = document.createElement("select");
+        ls.innerHTML = "<option>なし</option>";
+        val.appendChild(ls);
+        break;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // 一覧と編集欄
+  // ------------------------------------------------------------------
+  function depthAt(index) {
+    var d = 0;
+    for (var i = 0; i < index; i++) {
+      if (state.items[i].type === "group") d++;
+      if (state.items[i].type === "groupEnd") d--;
+    }
+    return d;
+  }
+
+  function renderList() {
+    var ul = document.getElementById("items");
+    ul.innerHTML = "";
+    state.items.forEach(function (p, i) {
+      var d = depthAt(i) - (p.type === "groupEnd" ? 1 : 0);
+      var li = el("li", (i === state.sel ? "sel" : "") + (p.type === "groupEnd" ? " end" : ""));
+      li.style.paddingLeft = (8 + d * 16) + "px";
+      if (p.type === "groupEnd") {
+        li.textContent = "└ グループ終了";
+      } else {
+        li.appendChild(el("span", "type", "[" + typeLabel(p.type) + "] "));
+        li.appendChild(document.createTextNode(p.name + (p.invisible ? "（非表示）" : "")));
+      }
+      li.addEventListener("click", function () { select(i); });
+      ul.appendChild(li);
+    });
+  }
+
+  function field(label, input) {
+    var l = el("label", "row");
+    l.appendChild(document.createTextNode(label));
+    l.appendChild(input);
+    return l;
+  }
+
+  function textInput(value, onChange) {
+    var i = document.createElement("input");
+    i.type = "text"; i.value = value;
+    i.addEventListener("input", function () { onChange(i.value); });
+    return i;
+  }
+
+  function numInput(value, onChange, attrs) {
+    var i = document.createElement("input");
+    i.type = "number"; i.value = value; i.step = "any";
+    if (attrs) Object.keys(attrs).forEach(function (k) { i[k] = attrs[k]; });
+    i.addEventListener("input", function () { var n = parseFloat(i.value); onChange(isNaN(n) ? 0 : n); });
+    return i;
+  }
+
+  function checkbox(label, value, onChange) {
+    var l = el("label");
+    var c = document.createElement("input");
+    c.type = "checkbox"; c.checked = !!value;
+    c.addEventListener("change", function () { onChange(c.checked); });
+    l.appendChild(c); l.appendChild(document.createTextNode(" " + label));
+    return l;
+  }
+
+  function multi(label, values, onChange, attrs) {
+    var wrap = el("div", "multi");
+    values.forEach(function (v, k) {
+      wrap.appendChild(numInput(v, function (n) { var arr = values.slice(); arr[k] = n; values = arr; onChange(arr); }, attrs));
+    });
+    return field(label, wrap);
+  }
+
+  function renderEditor() {
+    var body = document.getElementById("editorBody");
+    body.innerHTML = "";
+    var p = state.items[state.sel];
+    if (!p) { body.appendChild(el("p", "hint", "一覧から項目を選んでください。")); return; }
+    if (p.type === "groupEnd") { body.appendChild(el("p", "hint", "ここまでがグループの中身です。")); return; }
+
+    var changed = function () { renderList(); renderPreview(); };
+    body.appendChild(field("名前", textInput(p.name, function (v) { p.name = v; changed(); })));
+
+    var checks = el("div", "checks");
+    if (HIDEABLE[p.type]) checks.appendChild(checkbox("非表示", p.invisible, function (v) { p.invisible = v; changed(); }));
+    if (HOLDABLE[p.type]) checks.appendChild(checkbox("停止キーフレーム", p.hold, function (v) { p.hold = v; changed(); }));
+    if (checks.children.length) body.appendChild(checks);
+
+    switch (p.type) {
+      case "slider":
+        [["初期値", "value"], ["スライダー最小", "sliderMin"], ["スライダー最大", "sliderMax"], ["有効最小", "validMin"], ["有効最大", "validMax"]]
+          .forEach(function (f) { body.appendChild(field(f[0], numInput(p[f[1]], function (n) { p[f[1]] = n; changed(); }))); });
+        body.appendChild(field("小数点以下の桁数", numInput(p.precision || 0, function (n) {
+          p.precision = Math.max(0, Math.min(6, Math.round(n))); changed();
+        }, { min: 0, max: 6, step: 1 })));
+        var sc = el("div", "checks");
+        sc.appendChild(checkbox("% 表示", p.percent, function (v) { p.percent = v; changed(); }));
+        sc.appendChild(checkbox("ピクセル値", p.pixel, function (v) { p.pixel = v; changed(); }));
+        body.appendChild(sc);
+        break;
+      case "angle":
+        body.appendChild(field("初期値（度）", numInput(p.value, function (n) { p.value = n; changed(); })));
+        body.appendChild(el("p", "hint", "1回転 = 360 度（例: 1回転と45度 → 405）"));
+        break;
+      case "checkbox":
+        body.appendChild(el("div", "checks")).appendChild(checkbox("初期値をオンにする", p.value, function (v) { p.value = v; changed(); }));
+        body.appendChild(field("横に出す文字", textInput(p.label || "", function (v) { p.label = v; changed(); })));
+        break;
+      case "color":
+        var picker = document.createElement("input");
+        picker.type = "color";
+        picker.value = "#" + p.value.map(function (c) { return ("0" + c.toString(16)).slice(-2); }).join("");
+        picker.addEventListener("input", function () {
+          var h = picker.value;
+          p.value = [parseInt(h.substr(1, 2), 16), parseInt(h.substr(3, 2), 16), parseInt(h.substr(5, 2), 16)];
+          changed();
+        });
+        body.appendChild(field("初期色", picker));
+        break;
+      case "point":
+        body.appendChild(multi("初期位置（%）", p.value, function (a) { p.value = a; changed(); }));
+        body.appendChild(el("p", "hint", "レイヤーの幅・高さに対する % で指定します（50, 50 で中央）。"));
+        break;
+      case "point3d":
+        body.appendChild(multi("初期位置（%）", p.value, function (a) { p.value = a; changed(); }));
+        break;
+      case "popup":
+        body.appendChild(field("項目（| 区切り）", textInput(p.items.join("|"), function (v) { p.items = v.split("|"); changed(); })));
+        body.appendChild(field("初期値（番号）", numInput(p.value, function (n) { p.value = Math.round(n); changed(); }, { min: 1, step: 1 })));
+        break;
+      case "layer":
+        body.appendChild(el("p", "hint", "初期値は「なし」になります。"));
+        break;
+      case "label":
+        body.appendChild(el("div", "checks")).appendChild(checkbox("文字を薄く表示", p.dim, function (v) { p.dim = v; changed(); }));
+        break;
+      case "group":
+        body.appendChild(el("p", "hint", "この下から「グループ終了」までがグループの中身です。"));
+        break;
+    }
+  }
+
+  function refreshEditorIfSel(i) { if (i === state.sel) renderEditor(); }
+
+  function select(i) {
+    state.sel = i;
+    renderAll();
+  }
+
+  function renderAll() {
+    document.getElementById("effName").value = state.name;
+    document.getElementById("effMatch").value = state.matchName;
+    renderList();
+    renderEditor();
+    renderPreview();
+  }
+
+  // ------------------------------------------------------------------
+  // 操作
+  // ------------------------------------------------------------------
+  function insertAt() { return state.sel >= 0 ? state.sel + 1 : state.items.length; }
+
+  function addItem() {
+    var type = document.getElementById("addType").value;
+    var at = insertAt();
+    var item = newItem(type);
+    item.name = uniqueName(item.name);
+    state.items.splice(at, 0, item);
+    if (type === "group") state.items.splice(at + 1, 0, { type: "groupEnd", name: "" });
+    select(at);
+  }
+
+  function move(delta) {
+    var i = state.sel, j = i + delta;
+    if (i < 0 || j < 0 || j >= state.items.length) return;
+    var t = state.items[i]; state.items[i] = state.items[j]; state.items[j] = t;
+    select(j);
+  }
+
+  function duplicate() {
+    var p = state.items[state.sel];
+    if (!p || p.type === "group" || p.type === "groupEnd") return;
+    var copy = JSON.parse(JSON.stringify(p));
+    copy.name = uniqueName(p.name + "_copy");
+    state.items.splice(state.sel + 1, 0, copy);
+    select(state.sel + 1);
+  }
+
+  // グループを消すときは、中身は残して「グループ終了」も一緒に消す
+  function removeItem() {
+    var i = state.sel, p = state.items[i], d = 0, j;
+    if (!p) return;
+    if (p.type === "group") {
+      for (j = i; j < state.items.length; j++) {
+        if (state.items[j].type === "group") d++;
+        if (state.items[j].type === "groupEnd" && --d === 0) break;
+      }
+      state.items.splice(j, 1); state.items.splice(i, 1);
+    } else if (p.type === "groupEnd") {
+      for (j = i; j >= 0; j--) {
+        if (state.items[j].type === "groupEnd") d++;
+        if (state.items[j].type === "group" && --d === 0) break;
+      }
+      state.items.splice(i, 1); state.items.splice(j, 1); i = j;
+    } else {
+      state.items.splice(i, 1);
+    }
+    select(Math.min(i, state.items.length - 1));
+  }
+
+  function readFile(input, asBinary, fn) {
+    input.onchange = function () {
+      var f = input.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () { fn(f, r.result); input.value = ""; };
+      if (asBinary) r.readAsArrayBuffer(f); else r.readAsText(f, "utf-8");
+    };
+    input.click();
+  }
+
+  // ------------------------------------------------------------------
+  // 初期化
+  // ------------------------------------------------------------------
+  var addType = document.getElementById("addType");
+  TYPES.forEach(function (t) { var o = document.createElement("option"); o.value = t.type; o.textContent = t.label; addType.appendChild(o); });
+
+  document.getElementById("effName").addEventListener("input", function (e) { state.name = e.target.value; renderPreview(); });
+  document.getElementById("effMatch").addEventListener("input", function (e) { state.matchName = e.target.value; });
+  document.getElementById("add").addEventListener("click", addItem);
+  document.getElementById("up").addEventListener("click", function () { move(-1); });
+  document.getElementById("down").addEventListener("click", function () { move(1); });
+  document.getElementById("dup").addEventListener("click", duplicate);
+  document.getElementById("del").addEventListener("click", removeItem);
+
+  document.getElementById("dlFfx").addEventListener("click", checked(function (def) {
+    download(identifierFrom(def.name) + ".ffx", toUint8(CK_FFXWriter.build(def)), "application/octet-stream");
+  }));
+  document.getElementById("dlJsx").addEventListener("click", checked(function (def) {
+    download(identifierFrom(def.name) + "_ffx.jsx", snippetFor(CK_FFXWriter.build(def), def.name), "text/plain");
+  }));
+  document.getElementById("dlJson").addEventListener("click", checked(function (def) {
+    download(identifierFrom(def.name) + ".ck.json", JSON.stringify(def, null, 2), "application/json");
+  }));
+  document.getElementById("copyCode").addEventListener("click", checked(function (def) {
+    var code = snippetFor(CK_FFXWriter.build(def), def.name);
+    navigator.clipboard.writeText(code).then(function () { showErrors([]); alertOk("埋め込みコードをコピーしました。"); },
+      function () { download(identifierFrom(def.name) + "_ffx.jsx", code, "text/plain"); });
+  }));
+  document.getElementById("loadJson").addEventListener("click", function () {
+    readFile(document.getElementById("fileJson"), false, function (f, text) {
+      try {
+        var def = JSON.parse(text);
+        state.name = def.name || "";
+        state.matchName = def.matchName || "";
+        state.items = unnest(def.params || [], []);
+        state.sel = state.items.length ? 0 : -1;
+        showErrors([]);
+        renderAll();
+      } catch (e) {
+        showErrors(["読み込めませんでした: " + e.message]);
+      }
+    });
+  });
+  document.getElementById("convertFfx").addEventListener("click", function () {
+    readFile(document.getElementById("fileFfx"), true, function (f, buf) {
+      var bytes = fromArrayBuffer(buf);
+      if (bytes.slice(0, 4) !== "RIFX") return showErrors([".ffx ファイルではないようです。"]);
+      var name = f.name.replace(/\.ffx$/i, "");
+      download(identifierFrom(name) + "_ffx.jsx", snippetFor(bytes, name), "text/plain");
+    });
+  });
+
+  function alertOk(msg) {
+    var ul = document.getElementById("errors");
+    ul.innerHTML = "";
+    var li = el("li", "", msg);
+    li.style.color = "var(--muted)";
+    ul.appendChild(li);
+  }
+
+  renderAll();
+
+  // テスト用
+  window.CtrlKitWeb = { state: state, currentDefinition: currentDefinition, validate: validate, renderAll: renderAll };
+})();
+</script>
+</body>
+</html>
