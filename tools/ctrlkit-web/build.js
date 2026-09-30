@@ -15,11 +15,16 @@ var srcDir = path.join(here, "..", "..", "packages", "ctrlkit", "src");
 var LIBS = ["binary.jsxinc", "ffx-writer.jsxinc", "embed.jsxinc"];
 var PLACEHOLDER = "<!-- @CTRLKIT_LIB@ -->";
 
+// Windows で CRLF で取り出されていても同じ結果になるよう、読み込んだ直後に LF にそろえる
+function read(file) {
+  return fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+}
+
 function render() {
-  var template = fs.readFileSync(path.join(here, "template.html"), "utf8");
+  var template = read(path.join(here, "template.html"));
   if (template.indexOf(PLACEHOLDER) < 0) throw new Error("template.html に " + PLACEHOLDER + " がありません");
   var lib = LIBS.map(function (name) {
-    var code = fs.readFileSync(path.join(srcDir, name), "utf8").replace(/<\/script/gi, "<\\/script");
+    var code = read(path.join(srcDir, name)).replace(/<\/script/gi, "<\\/script");
     return "<!-- packages/ctrlkit/src/" + name + " -->\n<script>\n" + code + "\n</script>";
   }).join("\n");
   var html = template.split(PLACEHOLDER).join(lib);
