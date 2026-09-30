@@ -9,7 +9,7 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 | --- | --- | --- |
 | Zabuton | `packages/zabuton/` | テキストの背景に、文字サイズにぴったり合う「座布団」（角丸の長方形シェイプ）を自動で敷く |
 | CtrlKit | `packages/ctrlkit/` | AE上で疑似エフェクトを組み立て、`.ffx` とスクリプト埋め込み用コードを書き出すパネル（[詳細](packages/ctrlkit/README.md)） |
-| CtrlKit Web | `tools/ctrlkit-web/` | CtrlKit と同じことをブラウザでできる版。`ctrlkit.html` を開くだけで使える（[詳細](tools/ctrlkit-web/README.md)） |
+| CtrlKit Web | `tools/ctrlkit-web/` | CtrlKit と同じことをブラウザでできる版。[ブラウザで開く](https://motiontechweb.github.io/ae-scripts/tools/ctrlkit-web/ctrlkit.html)だけで使える（[詳細](tools/ctrlkit-web/README.md)） |
 
 ### Zabuton（座布団スクリプト）
 
