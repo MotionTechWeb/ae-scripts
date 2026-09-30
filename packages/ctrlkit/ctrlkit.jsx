@@ -270,8 +270,12 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     if (!(comp instanceof CompItem) || comp.selectedLayers.length === 0) {
       return alert("プレビューするレイヤーを選択してください。", TITLE);
     }
+    // AE は同じ内部名の疑似エフェクトの定義を覚えてしまうため、プレビューでは毎回別の内部名にする
+    var def = currentDefinition();
+    var suffix = "_" + new Date().getTime().toString(36).slice(-5);
+    def.matchName = def.matchName.substring(0, MATCHNAME_MAX - suffix.length) + suffix;
     var tmp = new File(Folder.temp.fsName + "/ck_preview.ffx");
-    writeBinary(tmp, CK_FFXWriter.build(currentDefinition()));
+    writeBinary(tmp, CK_FFXWriter.build(def));
     app.beginUndoGroup(TITLE + " プレビュー");
     try {
       comp.selectedLayers[0].applyPreset(tmp);
