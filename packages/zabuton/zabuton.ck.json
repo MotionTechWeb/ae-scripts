@@ -1,0 +1,10 @@
+{
+  "name": "Zabuton",
+  "matchName": "Pseudo/Zabuton",
+  "params": [
+    { "type": "slider", "name": "X_position_Padding", "value": 0, "sliderMin": 0, "sliderMax": 5000, "validMin": 0, "validMax": 5000, "precision": 0, "hold": true },
+    { "type": "slider", "name": "Y_position_Padding", "value": 0, "sliderMin": 0, "sliderMax": 5000, "validMin": 0, "validMax": 5000, "precision": 0 },
+    { "type": "slider", "name": "zabuton_radius", "value": 0, "sliderMin": 0, "sliderMax": 1000, "validMin": 0, "validMax": 1000, "precision": 0 },
+    { "type": "color", "name": "BG_Color", "value": [255, 0, 0] }
+  ]
+}

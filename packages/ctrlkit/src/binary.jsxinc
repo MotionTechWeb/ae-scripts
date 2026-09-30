@@ -1,0 +1,98 @@
+/*
+ * バイト列（0〜255の文字からなる文字列）を組み立てるための小さなヘルパー。
+ * ExtendScript（ES3）と Node の両方で動くように書いている。
+ * .ffx は RIFX（ビッグエンディアンの RIFF）形式。
+ */
+var CK_Binary = (function () {
+  function u8(n) {
+    return String.fromCharCode(n & 0xff);
+  }
+
+  function u16(n) {
+    return u8(n >>> 8) + u8(n);
+  }
+
+  function u32(n) {
+    return u8(n >>> 24) + u8(n >>> 16) + u8(n >>> 8) + u8(n);
+  }
+
+  function zeros(len) {
+    var s = "";
+    for (var i = 0; i < len; i++) s += "\x00";
+    return s;
+  }
+
+  // 固定長の文字列（ASCII）。足りない分は 0 で埋める
+  function fixedString(str, len) {
+    var s = str.length > len ? str.substring(0, len) : str;
+    return s + zeros(len - s.length);
+  }
+
+  // 16進文字列（"00ff..."）をバイト列に
+  function fromHex(hex) {
+    var s = "";
+    hex = hex.replace(/\s+/g, "");
+    for (var i = 0; i < hex.length; i += 2) {
+      s += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return s;
+  }
+
+  // IEEE754 倍精度（ビッグエンディアン）
+  function f64(value) {
+    if (value === 0) return zeros(8);
+    var sign = value < 0 ? 1 : 0;
+    var v = Math.abs(value);
+    var exp = Math.floor(Math.log(v) / Math.LN2);
+    if (v / Math.pow(2, exp) < 1) exp--;
+    if (v / Math.pow(2, exp) >= 2) exp++;
+    var mant = v / Math.pow(2, exp) - 1; // [0,1)
+    var hi = Math.floor(mant * 0x100000); // 上位20ビット
+    var lo = Math.round((mant * 0x100000 - hi) * 0x100000000); // 下位32ビット
+    if (lo >= 0x100000000) {
+      lo = 0;
+      hi++;
+    }
+    var e = exp + 1023;
+    var word1 = sign * 0x80000000 + e * 0x100000 + hi;
+    return u32(word1) + u32(lo);
+  }
+
+  // IEEE754 単精度（ビッグエンディアン）
+  function f32(value) {
+    if (value === 0) return zeros(4);
+    var sign = value < 0 ? 1 : 0;
+    var v = Math.abs(value);
+    var exp = Math.floor(Math.log(v) / Math.LN2);
+    if (v / Math.pow(2, exp) < 1) exp--;
+    if (v / Math.pow(2, exp) >= 2) exp++;
+    var mant = Math.round((v / Math.pow(2, exp) - 1) * 0x800000);
+    if (mant >= 0x800000) {
+      mant = 0;
+      exp++;
+    }
+    return u32(sign * 0x80000000 + (exp + 127) * 0x800000 + mant);
+  }
+
+  // チャンク: tag(4) + size(4) + body + 奇数長なら 1 バイトのパディング
+  function chunk(tag, body) {
+    return tag + u32(body.length) + body + (body.length & 1 ? "\x00" : "");
+  }
+
+  function list(type, children) {
+    return chunk("LIST", type + children);
+  }
+
+  return {
+    u8: u8,
+    u16: u16,
+    u32: u32,
+    f32: f32,
+    f64: f64,
+    zeros: zeros,
+    fixedString: fixedString,
+    fromHex: fromHex,
+    chunk: chunk,
+    list: list
+  };
+})();
