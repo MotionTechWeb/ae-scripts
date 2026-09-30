@@ -497,13 +497,67 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return turns + "x" + (deg < 0 ? "" : "+") + deg.toFixed(1) + "°";
   }
 
-  function previewRow(depth, name, hidden) {
+  // --- 線で描くアイコン（AE の画像は使わず自前で描く） ---
+  var ICON_COLOR = [0.75, 0.75, 0.75, 1];
+
+  // ストップウォッチ（キーフレームを打てる項目の目印）
+  function addStopwatch(parent) {
+    var g = parent.add("group");
+    g.preferredSize = [14, 14];
+    g.onDraw = function () {
+      var gr = this.graphics;
+      var pen = gr.newPen(gr.PenType.SOLID_COLOR, ICON_COLOR, 1.2);
+      gr.newPath();
+      gr.ellipsePath(2, 3, 10, 10);
+      gr.strokePath(pen);
+      gr.newPath();
+      gr.moveTo(5, 1);
+      gr.lineTo(9, 1);
+      gr.moveTo(7, 1);
+      gr.lineTo(7, 3);
+      gr.moveTo(7, 8);
+      gr.lineTo(7, 5);
+      gr.strokePath(pen);
+    };
+    return g;
+  }
+
+  // 角度のダイヤル（0度が上、時計回り）
+  function addDial(parent, degrees) {
+    var g = parent.add("group");
+    g.preferredSize = [28, 28];
+    g.onDraw = function () {
+      var gr = this.graphics;
+      var pen = gr.newPen(gr.PenType.SOLID_COLOR, ICON_COLOR, 1.5);
+      var r = 12;
+      var c = 14;
+      var a = (degrees * Math.PI) / 180;
+      gr.newPath();
+      gr.ellipsePath(c - r, c - r, r * 2, r * 2);
+      gr.strokePath(pen);
+      gr.newPath();
+      gr.moveTo(c, c);
+      gr.lineTo(c + (r - 2) * Math.sin(a), c - (r - 2) * Math.cos(a));
+      gr.strokePath(pen);
+    };
+    return g;
+  }
+
+  var KEYFRAMABLE = { slider: 1, angle: 1, checkbox: 1, color: 1, point: 1, point3d: 1, popup: 1 };
+
+  function previewRow(depth, name, hidden, type) {
     var row = previewBody.add("group");
     row.alignChildren = ["left", "center"];
     row.spacing = 4;
     if (depth > 0) {
       var indent = row.add("group");
       indent.preferredSize = [depth * 14, 1];
+    }
+    if (KEYFRAMABLE[type]) {
+      addStopwatch(row);
+    } else {
+      var blank = row.add("group");
+      blank.preferredSize = [14, 14];
     }
     var st = row.add("statictext", undefined, name + (hidden ? "（非表示）" : ""));
     st.preferredSize.width = NAME_WIDTH;
@@ -536,7 +590,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         depth = Math.max(0, depth - 1);
         continue;
       }
-      var row = previewRow(depth, (p.type === "group" ? "▼ " : "") + p.name, p.invisible);
+      var row = previewRow(depth, (p.type === "group" ? "▼ " : "") + p.name, p.invisible, p.type);
       addPreviewWidget(row, p, i);
       selectOnClick(row, i);
       if (p.type === "group") depth++;
@@ -565,6 +619,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         break;
       case "angle":
         row.add("statictext", undefined, angleText(v));
+        addDial(row, v || 0);
         break;
       case "checkbox":
         w = row.add("checkbox", undefined, p.label || "");
@@ -604,7 +659,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         w.selection = 0;
         break;
       case "label":
-        if (p.dim) row.children[row.children.length - 1].enabled = false;
+        if (p.dim) row.children[row.children.length - 1].enabled = false; // 名前の文字
         break;
     }
   }
