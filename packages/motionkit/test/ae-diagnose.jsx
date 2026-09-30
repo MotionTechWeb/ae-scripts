@@ -34,7 +34,10 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
   }
 
   function applyFFX(layer, bytes, key) {
-    var f = new File(Folder.temp.fsName + "/motionkit_diag_" + key + ".ffx");
+    // motionkit.jsx と同じく、.ffx は消さずに残す（消すと AE が定義を見失うことがある）
+    var dir = new Folder(Folder.userData.fsName + "/MotionKit");
+    if (!dir.exists) dir.create();
+    var f = new File(dir.fsName + "/diag_" + key + ".ffx");
     f.encoding = "BINARY";
     f.open("w");
     f.write(bytes);
@@ -43,7 +46,6 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
     for (var i = 0; i < sel.length; i++) sel[i].selected = false;
     layer.selected = true;
     layer.applyPreset(f);
-    f.remove();
   }
 
   var mode = prompt(

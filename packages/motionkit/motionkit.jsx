@@ -1023,21 +1023,31 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
     return null;
   }
 
-  // 埋め込んだ疑似エフェクトを一時ファイルに書き出して適用する（付いていればそれを返す）
+  // 疑似エフェクトの .ffx を置いておく場所。
+  // AE は読み込んだ .ffx を後から読み直すことがあり、消してしまうと別の疑似エフェクトを
+  // 読み込んだときに先の定義を見失う（Actual missing plugin）ので、消さずに残しておく
+  function ffxFile(key) {
+    var dir = new Folder(Folder.userData.fsName + "/MotionKit");
+    if (!dir.exists && !dir.create()) throw new Error("フォルダを作成できません: " + dir.fsName);
+    var f = new File(dir.fsName + "/" + MK_MATCHNAME[key].replace(/^Pseudo\//, "").replace(/[^A-Za-z0-9_ -]/g, "_") + ".ffx");
+    f.encoding = "BINARY";
+    if (f.exists && f.length === MK_FFX[key].length) return f;
+    if (!f.open("w")) throw new Error("ファイルを作成できません: " + f.fsName);
+    f.write(MK_FFX[key]);
+    f.close();
+    return f;
+  }
+
+  // 埋め込んだ疑似エフェクトを適用する（付いていればそれを返す）
   function ensureEffect(layer, key) {
     var found = findEffect(layer, key);
     if (found) return found;
-    var f = new File(Folder.temp.fsName + "/motionkit_" + key + ".ffx");
-    f.encoding = "BINARY";
-    if (!f.open("w")) throw new Error("一時ファイルを作成できません: " + f.fsName);
-    f.write(MK_FFX[key]);
-    f.close();
+    var f = ffxFile(key);
     // applyPreset は選択中のレイヤーに適用されるため、対象レイヤーだけを選択する
     var sel = layer.containingComp.selectedLayers;
     for (var i = 0; i < sel.length; i++) sel[i].selected = false;
     layer.selected = true;
     layer.applyPreset(f);
-    f.remove();
     found = findEffect(layer, key);
     if (!found) throw new Error("エフェクト「" + MK_EFFECT_NAME[key] + "」を適用できませんでした。");
     return found;
@@ -1398,6 +1408,9 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
     function paint() {
       var c = rgb01(sw.color);
       chip.graphics.backgroundColor = chip.graphics.newBrush(chip.graphics.BrushType.SOLID_COLOR, [c[0], c[1], c[2], 1]);
+      // 背景色を変えただけでは塗り直されないので、一度隠して出し直す
+      chip.hide();
+      chip.show();
     }
     paint();
     b.onClick = function () {
