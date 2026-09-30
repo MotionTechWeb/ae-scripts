@@ -263,22 +263,40 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     alert("書き出しました:\n" + out.fsName, TITLE);
   }
 
-  // 選択中のレイヤーにその場で適用して見た目を確認する
-  function preview() {
+  // パネルから前回適用したときの内部名（付け直すときに古い方を消すため）
+  var lastAppliedMatchName = null;
+
+  function removePreviouslyApplied(layers) {
+    if (!lastAppliedMatchName) return;
+    for (var i = 0; i < layers.length; i++) {
+      var effects = layers[i].property("ADBE Effect Parade");
+      for (var j = effects.numProperties; j >= 1; j--) {
+        if (effects.property(j).matchName === lastAppliedMatchName) effects.property(j).remove();
+      }
+    }
+  }
+
+  // 選択中のレイヤーすべてにまとめて適用する（前回パネルから付けたものは付け直す）
+  function applyToLayers() {
     if (!checkOrAlert()) return;
     var comp = app.project.activeItem;
     if (!(comp instanceof CompItem) || comp.selectedLayers.length === 0) {
-      return alert("プレビューするレイヤーを選択してください。", TITLE);
+      return alert("適用するレイヤーを選択してください。", TITLE);
     }
-    // AE は同じ内部名の疑似エフェクトの定義を覚えてしまうため、プレビューでは毎回別の内部名にする
+    // AE は同じ内部名の疑似エフェクトの定義を覚えてしまうため、パネルから適用するときは毎回別の内部名にする
+    // （書き出す .ffx は設定どおりの内部名）
     var def = currentDefinition();
     var suffix = "_" + new Date().getTime().toString(36).slice(-5);
     def.matchName = def.matchName.substring(0, MATCHNAME_MAX - suffix.length) + suffix;
     var tmp = new File(Folder.temp.fsName + "/ck_preview.ffx");
     writeBinary(tmp, CK_FFXWriter.build(def));
-    app.beginUndoGroup(TITLE + " プレビュー");
+    app.beginUndoGroup(TITLE + " 適用");
     try {
-      comp.selectedLayers[0].applyPreset(tmp);
+      var layers = comp.selectedLayers;
+      removePreviouslyApplied(layers);
+      // applyPreset は選択中のレイヤーすべてに適用される
+      layers[0].applyPreset(tmp);
+      lastAppliedMatchName = def.matchName;
     } finally {
       app.endUndoGroup();
       tmp.remove();
@@ -299,10 +317,25 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   // UI
   // ---------------------------------------------------------------------
   var win = thisObj instanceof Panel ? thisObj : new Window("palette", TITLE, undefined, { resizeable: true });
-  win.orientation = "column";
+  win.orientation = "row";
   win.alignChildren = ["fill", "top"];
 
-  var head = win.add("panel", undefined, "エフェクト");
+  // 左: エフェクトコントロール風のプレビュー
+  var previewPanel = win.add("panel", undefined, "プレビュー");
+  previewPanel.alignChildren = ["fill", "top"];
+  previewPanel.preferredSize.width = 300;
+  var previewTitle = previewPanel.add("statictext", undefined, "fx  " + state.name);
+  var previewBody = previewPanel.add("group");
+  previewBody.orientation = "column";
+  previewBody.alignChildren = ["fill", "top"];
+  previewBody.spacing = 2;
+
+  // 右: 設定
+  var right = win.add("group");
+  right.orientation = "column";
+  right.alignChildren = ["fill", "top"];
+
+  var head = right.add("panel", undefined, "エフェクト");
   head.alignChildren = ["fill", "top"];
   var rowName = head.add("group");
   rowName.add("statictext", undefined, "名前");
@@ -314,7 +347,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   etMatch.characters = 20;
   etMatch.helpTip = "空欄なら「" + MATCHNAME_PREFIX + "名前」になります。ほかの疑似エフェクトと重ならない名前にしてください。";
 
-  var listPanel = win.add("panel", undefined, "項目");
+  var listPanel = right.add("panel", undefined, "項目");
   listPanel.alignChildren = ["fill", "top"];
   var lb = listPanel.add("listbox", undefined, [], { multiselect: false });
   lb.preferredSize = [280, 180];
@@ -332,7 +365,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   btnUp.preferredSize.width = btnDown.preferredSize.width = 36;
 
   // --- 選択中の項目の編集欄 ---
-  var edit = win.add("panel", undefined, "選択中の項目");
+  var edit = right.add("panel", undefined, "選択中の項目");
   edit.alignChildren = ["fill", "top"];
   var rowPName = edit.add("group");
   rowPName.add("statictext", undefined, "名前");
@@ -416,10 +449,10 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   var hint = edit.add("statictext", undefined, "", { multiline: true });
   hint.preferredSize = [260, 30];
 
-  var actions = win.add("group");
+  var actions = right.add("group");
   actions.orientation = "column";
   actions.alignChildren = ["fill", "top"];
-  var btnPreview = actions.add("button", undefined, "選択レイヤーでプレビュー");
+  var btnApply = actions.add("button", undefined, "選択レイヤーにまとめて適用");
   var btnExport = actions.add("button", undefined, "書き出し（.ffx＋埋め込みコード）");
   var rowFile = actions.add("group");
   rowFile.alignChildren = ["fill", "center"];
@@ -449,6 +482,127 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
     return lb.selection ? state.items[lb.selection.index] : null;
   }
 
+  // --- プレビュー（エフェクトコントロール風） ---
+  var NAME_WIDTH = 110;
+
+  function angleText(v) {
+    var turns = v < 0 ? Math.ceil(v / 360) : Math.floor(v / 360);
+    var deg = v - turns * 360;
+    return turns + "x" + (deg < 0 ? "" : "+") + deg.toFixed(1) + "°";
+  }
+
+  function previewRow(depth, name, hidden) {
+    var row = previewBody.add("group");
+    row.alignChildren = ["left", "center"];
+    row.spacing = 4;
+    if (depth > 0) {
+      var indent = row.add("group");
+      indent.preferredSize = [depth * 14, 1];
+    }
+    var st = row.add("statictext", undefined, name + (hidden ? "（非表示）" : ""));
+    st.preferredSize.width = NAME_WIDTH;
+    if (hidden) row.enabled = false;
+    return row;
+  }
+
+  // 行の名前をクリックすると、右の一覧でその項目を選ぶ
+  function selectOnClick(row, index) {
+    row.addEventListener("mousedown", function () {
+      if (!lb.selection || lb.selection.index !== index) {
+        lb.selection = index;
+        refreshEditor();
+      }
+    });
+  }
+
+  // プレビュー上の操作で初期値を変えたとき
+  function previewChanged(index) {
+    if (lb.selection && lb.selection.index === index) refreshEditor();
+  }
+
+  function renderPreview() {
+    while (previewBody.children.length) previewBody.remove(previewBody.children[0]);
+    previewTitle.text = "fx  " + (state.name || "");
+    var depth = 0;
+    for (var i = 0; i < state.items.length; i++) {
+      var p = state.items[i];
+      if (p.type === "groupEnd") {
+        depth = Math.max(0, depth - 1);
+        continue;
+      }
+      var row = previewRow(depth, (p.type === "group" ? "▼ " : "") + p.name, p.invisible);
+      addPreviewWidget(row, p, i);
+      selectOnClick(row, i);
+      if (p.type === "group") depth++;
+    }
+    if (!state.items.length) previewBody.add("statictext", undefined, "（項目を追加するとここに表示されます）");
+    win.layout.layout(true);
+  }
+
+  function addPreviewWidget(row, p, index) {
+    var v = p.value;
+    var w;
+    switch (p.type) {
+      case "slider":
+        var txt = row.add("statictext", undefined, Number(v).toFixed(p.precision || 0) + (p.percent ? "%" : ""));
+        txt.preferredSize.width = 50;
+        w = row.add("slider", undefined, v, p.sliderMin, p.sliderMax);
+        w.preferredSize.width = 100;
+        w.onChanging = function () {
+          txt.text = this.value.toFixed(p.precision || 0) + (p.percent ? "%" : "");
+        };
+        w.onChange = function () {
+          var f = Math.pow(10, p.precision || 0);
+          p.value = Math.round(this.value * f) / f;
+          previewChanged(index);
+        };
+        break;
+      case "angle":
+        row.add("statictext", undefined, angleText(v));
+        break;
+      case "checkbox":
+        w = row.add("checkbox", undefined, p.label || "");
+        w.value = !!v;
+        w.onClick = function () {
+          p.value = this.value;
+          previewChanged(index);
+        };
+        break;
+      case "color":
+        var sw = row.add("group");
+        sw.preferredSize = [40, 16];
+        sw.graphics.backgroundColor = sw.graphics.newBrush(sw.graphics.BrushType.SOLID_COLOR, [
+          v[0] / 255,
+          v[1] / 255,
+          v[2] / 255,
+          1
+        ]);
+        break;
+      case "point":
+        row.add("statictext", undefined, v[0] + "%, " + v[1] + "%");
+        break;
+      case "point3d":
+        row.add("statictext", undefined, v[0] + "%, " + v[1] + "%, " + v[2] + "%");
+        break;
+      case "popup":
+        w = row.add("dropdownlist", undefined, p.items);
+        w.selection = Math.max(0, Math.min(p.items.length, v) - 1);
+        w.onChange = function () {
+          if (!this.selection) return;
+          p.value = this.selection.index + 1;
+          previewChanged(index);
+        };
+        break;
+      case "layer":
+        w = row.add("dropdownlist", undefined, ["なし"]);
+        w.selection = 0;
+        break;
+      case "label":
+        if (p.dim) row.children[row.children.length - 1].enabled = false;
+        break;
+    }
+  }
+
   function refreshList(selectIndex) {
     lb.removeAll();
     for (var i = 0; i < state.items.length; i++) lb.add("item", labelFor(i));
@@ -456,6 +610,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
       lb.selection = selectIndex;
     }
     refreshEditor();
+    renderPreview();
   }
 
   function refreshEditor() {
@@ -580,6 +735,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
         break;
     }
     lb.selection.text = labelFor(lb.selection.index);
+    renderPreview();
   }
 
   function insertAt() {
@@ -647,6 +803,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
 
   etName.onChanging = function () {
     state.name = etName.text;
+    previewTitle.text = "fx  " + state.name;
   };
   etMatch.onChanging = function () {
     state.matchName = etMatch.text;
@@ -679,7 +836,7 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
       }
     };
   }
-  btnPreview.onClick = guarded(preview);
+  btnApply.onClick = guarded(applyToLayers);
   btnExport.onClick = guarded(exportFiles);
   btnLoad.onClick = guarded(loadSettings);
   btnConvert.onClick = guarded(convertExisting);
