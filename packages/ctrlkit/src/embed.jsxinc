@@ -1,0 +1,63 @@
+/*
+ * .ffx のバイト列を、スクリプトに貼り付けられる文字列リテラルと適用関数に変換する。
+ * 出力したコードは zabuton.jsx と同じ仕組み（一時フォルダに書き出して applyPreset）で動く。
+ */
+var CK_Embed = (function () {
+  var LINE_WIDTH = 100;
+
+  function escapeByte(code) {
+    if (code === 0x22) return '\\"';
+    if (code === 0x5c) return "\\\\";
+    if (code >= 0x20 && code < 0x7f) return String.fromCharCode(code);
+    var h = code.toString(16);
+    return "\\x" + (h.length < 2 ? "0" + h : h);
+  }
+
+  // var NAME = "...." + "...."; の形にする
+  function toStringLiteral(bytes, varName) {
+    var lines = [];
+    var cur = "";
+    for (var i = 0; i < bytes.length; i++) {
+      cur += escapeByte(bytes.charCodeAt(i) & 0xff);
+      if (cur.length >= LINE_WIDTH) {
+        lines.push(cur);
+        cur = "";
+      }
+    }
+    if (cur.length) lines.push(cur);
+    return "var " + varName + " =\n  \"" + lines.join("\" +\n  \"") + "\";\n";
+  }
+
+  // 文字列リテラル＋適用関数のスニペット
+  // opts: { varName, functionName, effectName }
+  function snippet(bytes, opts) {
+    var v = opts.varName;
+    var fn = opts.functionName;
+    var tmpName = fn.replace(/[^A-Za-z0-9_]/g, "_") + ".ffx";
+    return (
+      "// 疑似エフェクト「" + opts.effectName + "」（CtrlKit で生成）\n" +
+      toStringLiteral(bytes, v) +
+      "\n" +
+      "// layer に疑似エフェクトを適用し、追加されたエフェクトを返す（失敗したら null）\n" +
+      "function " + fn + "(layer) {\n" +
+      "  var f = new File(Folder.temp.fsName + \"/" + tmpName + "\");\n" +
+      "  f.encoding = \"BINARY\";\n" +
+      "  if (!f.open(\"w\")) return null;\n" +
+      "  f.write(" + v + ");\n" +
+      "  f.close();\n" +
+      "  // applyPreset は選択中のレイヤーに適用されるため、対象だけを選択する\n" +
+      "  var comp = layer.containingComp;\n" +
+      "  var selected = comp.selectedLayers;\n" +
+      "  for (var i = 0; i < selected.length; i++) selected[i].selected = false;\n" +
+      "  layer.selected = true;\n" +
+      "  var effects = layer.property(\"ADBE Effect Parade\");\n" +
+      "  var before = effects.numProperties;\n" +
+      "  layer.applyPreset(f);\n" +
+      "  f.remove();\n" +
+      "  return effects.numProperties > before ? effects.property(effects.numProperties) : null;\n" +
+      "}\n"
+    );
+  }
+
+  return { toStringLiteral: toStringLiteral, snippet: snippet };
+})();

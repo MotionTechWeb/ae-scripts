@@ -1,0 +1,155 @@
+/*
+ * 疑似エフェクトの定義から .ffx（アニメーションプリセット）のバイト列を作る。
+ * 事前に binary.jsxinc を読み込んでおくこと。
+ *
+ * 定義の例:
+ * {
+ *   name: "Zabuton",                 // エフェクトコントロールに表示される名前
+ *   matchName: "Pseudo/MyZabuton",   // 内部名。エフェクトごとに固有にする
+ *   params: [
+ *     { type: "slider", name: "Padding", validMin: 0, validMax: 5000,
+ *       sliderMin: 0, sliderMax: 5000, value: 0 },
+ *     { type: "color", name: "BG_Color", value: [255, 0, 0] }
+ *   ]
+ * }
+ *
+ * バイナリの意味は、AE が書き出した .ffx を読み解いて合わせている。
+ * 意味が分かっていないバイトは見本の値をそのまま使う。
+ */
+var CK_FFXWriter = (function (B) {
+  // --- 見本からそのまま使っている固定値 -------------------------------
+  var HEAD = "00000003 00000044 00000001 01000000";
+  var BESO =
+    "00000001 00000001 00000000 00005da8 001df852 00000000 00640064 00640064" +
+    "3ff00000 00000000 3ff00000 00000000 00000000 ffffffff";
+  // エフェクト本体（グループ）の tdb4
+  var ROOT_TDB4 =
+    "db990001 00010000 00010000 00000258 3f1a36e2 eb1c432d 3ff00000 00000000" +
+    "3ff00000 00000000 3ff00000 00000000 3ff00000 00000000 00000004 04c0c0c0" +
+    "ffc0c0c0 00000000 80000000";
+  var ROOT_TPDI = 0x0e;
+
+  var TYPE = {
+    slider: { pardType: 0x0a, tdb4Head: "bd990001 00010000 0001" },
+    color: { pardType: 0x05, tdb4Head: "bd990004 00070001 0002" }
+  };
+
+  function hex(h) {
+    return B.fromHex(h);
+  }
+
+  function pad(bytes, len) {
+    return bytes + B.zeros(len - bytes.length);
+  }
+
+  function tdmn(matchName) {
+    return B.chunk("tdmn", B.fixedString(matchName, 40));
+  }
+
+  function tdsn(name) {
+    return B.chunk("tdsn", name + "\x00");
+  }
+
+  function paramMatchName(def, index) {
+    var n = "000" + index;
+    return def.matchName + "-" + n.substring(n.length - 4);
+  }
+
+  // --- pard: パラメータの定義（148バイト） ------------------------------
+  function rootPard() {
+    return B.chunk(
+      "pard",
+      pad(B.zeros(48) + B.u32(2) + B.zeros(4) + B.u32(0x0e) + B.zeros(68) + B.u32(0xffffffff), 148)
+    );
+  }
+
+  function paramPard(p) {
+    var t = TYPE[p.type];
+    if (!t) throw new Error("未対応の種類です: " + p.type);
+    var s = B.zeros(12) + B.u32(t.pardType) + B.fixedString(p.name, 32); // 0-47
+    if (p.type === "slider") {
+      // 104: 有効最小, 108: 有効最大, 112: スライダー最小, 116: スライダー最大（見本では最小がすべて0のため最小の位置は推定）
+      s += B.zeros(104 - 48);
+      s += B.f32(p.validMin) + B.f32(p.validMax) + B.f32(p.sliderMin) + B.f32(p.sliderMax);
+    } else if (p.type === "color") {
+      var c = p.value;
+      // 56: 0000ffff（意味不明の固定値）, 60: 初期値 ARGB
+      s += B.zeros(8) + hex("0000ffff") + B.u8(255) + B.u8(c[0]) + B.u8(c[1]) + B.u8(c[2]);
+    }
+    return B.chunk("pard", pad(s, 148));
+  }
+
+  // --- tdbs: パラメータの現在値 ---------------------------------------
+  function rootTdbs() {
+    return B.list(
+      "tdbs",
+      B.chunk("tdsb", B.u32(3)) +
+        tdsn("") +
+        B.chunk("tdb4", pad(hex(ROOT_TDB4), 124)) +
+        B.chunk("cdat", B.zeros(40)) +
+        B.chunk("tdpi", B.u32(ROOT_TPDI))
+    );
+  }
+
+  function paramTdbs(p) {
+    var t = TYPE[p.type];
+    // tdb4 の 10-11 バイト目: 見本では「Hold」がオンのスライダーだけ 0004、ほかは 00ff / ffff
+    var flag = p.type === "slider" ? (p.hold ? "0004" : "00ff") : "ffff";
+    var tdb4 = B.chunk("tdb4", pad(hex(t.tdb4Head + flag + "00005da8"), 124));
+    var body = B.chunk("tdsb", B.u32(1)) + tdsn(p.name) + tdb4;
+    if (p.type === "slider") {
+      body += B.chunk("cdat", pad(B.f64(p.value || 0), 40));
+      body += B.chunk("tdum", B.f64(p.validMin)) + B.chunk("tduM", B.f64(p.validMax));
+    } else if (p.type === "color") {
+      var c = p.value;
+      body += B.chunk("cdat", pad(B.f64(255) + B.f64(c[0]) + B.f64(c[1]) + B.f64(c[2]), 96));
+    }
+    return B.list("tdbs", body);
+  }
+
+  function effectPath(def) {
+    return B.list(
+      "tdsp",
+      B.chunk("tdot", B.u32(0xffffffff)) +
+        B.chunk("tdpl", B.u32(2)) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0xffffffff)) + tdmn("ADBE Effect Parade")) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0)) + tdmn(def.matchName))
+    );
+  }
+
+  function endPath() {
+    return B.list(
+      "tdsp",
+      B.chunk("tdot", B.u32(0xffffffff)) +
+        B.chunk("tdpl", B.u32(1)) +
+        B.list("tdsi", B.chunk("tdix", B.u32(0xffffffff)) + tdmn("ADBE End of path sentinel"))
+    );
+  }
+
+  function build(def) {
+    var params = def.params;
+    var i;
+
+    var parT = B.chunk("parn", B.u32(params.length + 1));
+    parT += tdmn(paramMatchName(def, 0)) + rootPard();
+    for (i = 0; i < params.length; i++) {
+      parT += tdmn(paramMatchName(def, i + 1)) + paramPard(params[i]);
+    }
+
+    var tdgp = B.chunk("tdsb", B.u32(1)) + tdsn(def.name);
+    tdgp += tdmn(paramMatchName(def, 0)) + rootTdbs();
+    for (i = 0; i < params.length; i++) {
+      tdgp += tdmn(paramMatchName(def, i + 1)) + paramTdbs(params[i]);
+    }
+    tdgp += tdmn("ADBE Group End");
+
+    var sspc = B.chunk("fnam", B.zeros(48)) + B.list("parT", parT) + B.list("tdgp", tdgp);
+
+    var besc =
+      B.chunk("beso", hex(BESO)) + effectPath(def) + tdsn(def.name) + endPath() + B.list("sspc", sspc);
+
+    return B.chunk("RIFX", "FaFX" + B.chunk("head", hex(HEAD)) + B.list("besc", besc));
+  }
+
+  return { build: build };
+})(CK_Binary);

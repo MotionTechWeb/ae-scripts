@@ -1,3 +1,5 @@
 node_modules
 **/dist
 .DS_Store
+# 解析用の見本ファイル。リポジトリには含めない
+samples/
