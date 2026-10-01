@@ -8,6 +8,10 @@ AE上で疑似エフェクトを組み立て、.ffx と「スクリプト埋め�
   ドロップダウン、レイヤー、ラベル、グループ
 */
 
+// 「スクリプトファイルを実行」で開いた浮きウィンドウは、スクリプトが終わったあとにボタンが押される。
+// 専用のエンジンを指定しないと、そのときには実行環境が片付けられていて AE が固まったり落ちたりするため指定する
+#targetengine "CtrlKit"
+
 //@include "src/binary.jsxinc"
 //@include "src/ffx-writer.jsxinc"
 //@include "src/embed.jsxinc"

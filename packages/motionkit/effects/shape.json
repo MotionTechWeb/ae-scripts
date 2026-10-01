@@ -1,0 +1,16 @@
+[
+  {"type": "slider", "name": "Width", "value": 400},
+  {"type": "slider", "name": "Height", "value": 400},
+  {"type": "slider", "name": "Roundness", "value": 0},
+  {"type": "slider", "name": "Points", "value": 5},
+  {"type": "slider", "name": "Inner Radius", "value": 50},
+  {"type": "slider", "name": "Head Size", "value": 40},
+  {"type": "checkbox", "name": "Fill", "value": true},
+  {"type": "color", "name": "Fill Color", "value": [255, 255, 255]},
+  {"type": "checkbox", "name": "Stroke", "value": false},
+  {"type": "color", "name": "Stroke Color", "value": [255, 255, 255]},
+  {"type": "slider", "name": "Stroke Width", "value": 8},
+  {"type": "slider", "name": "Trim Start", "value": 0},
+  {"type": "slider", "name": "Trim End", "value": 100},
+  {"type": "angle", "name": "Trim Offset", "value": 0}
+]
