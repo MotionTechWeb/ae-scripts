@@ -10,6 +10,9 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
   3: MotionKit と同じ手順で長方形を作る（エフェクト＋エクスプレッション）
   4: 疑似エフェクトの「名前」と「内部名」の関係を調べる
      一致（A）→ 一致・空白入り（B）→ 食い違い（C）の順に試す。C で落ちれば、名前と内部名の食い違いが原因
+  5: どの種類の項目でエフェクトを見失うかを調べる
+     スライダー → チェックボックス → カラー → 角度 → ドロップダウン → MK_Shape と同じ中身 → MK_Anim → MK_Layout の順に、
+     毎回別の名前の疑似エフェクトを平面に付け、エクスプレッションから読ませる。落ちた直前の行が原因の種類
 */
 (function () {
   var log = new File(Folder.desktop.fsName + "/motionkit_diag.txt");
@@ -51,7 +54,7 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
   }
 
   var mode = prompt(
-    "どの確認をしますか？\n1: 疑似エフェクトを平面に付けるだけ\n2: シェイプを作るだけ\n3: MotionKit と同じ手順で長方形を作る\n4: 名前と内部名の関係を調べる",
+    "どの確認をしますか？\n1: 疑似エフェクトを平面に付けるだけ\n2: シェイプを作るだけ\n3: MotionKit と同じ手順で長方形を作る\n4: 名前と内部名の関係を調べる\n5: どの種類の項目で見失うかを調べる",
     "1",
     "MotionKit 確認"
   );
@@ -66,7 +69,46 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
     comp.openInViewer();
     write("コンポジション作成");
 
-    if (mode === "4") {
+    if (mode === "5") {
+      var ckDir5 = File($.fileName).parent.parent.parent.fsName + "/ctrlkit/src/";
+      $.evalFile(new File(ckDir5 + "binary.jsxinc"));
+      $.evalFile(new File(ckDir5 + "ffx-writer.jsxinc"));
+      function readDef(key) {
+        var jf = new File(File($.fileName).parent.parent.fsName + "/effects/" + key + ".ck.json");
+        jf.encoding = "UTF-8";
+        jf.open("r");
+        var t = jf.read();
+        jf.close();
+        return eval("(" + t + ")");
+      }
+      var sl = { type: "slider", name: "Amount", value: 50, sliderMin: 0, sliderMax: 100, validMin: 0, validMax: 100, precision: 0 };
+      var cases = [
+        { key: "slider", params: [sl] },
+        { key: "checkbox", params: [sl, { type: "checkbox", name: "Flag", value: true, label: "On" }] },
+        { key: "color", params: [sl, { type: "color", name: "Tint", value: [255, 128, 0] }] },
+        { key: "angle", params: [sl, { type: "angle", name: "Turn", value: 0 }] },
+        { key: "popup", params: [sl, { type: "popup", name: "Pick", items: ["A", "B", "C"], value: 1 }] },
+        { key: "shape", params: readDef("shape").params },
+        { key: "anim", params: readDef("anim").params },
+        { key: "layout", params: readDef("layout").params }
+      ];
+      var id5 = new Date().getTime().toString(36);
+      for (var c = 0; c < cases.length; c++) {
+        var cs = cases[c];
+        var nm = "Dg_" + cs.key + "_" + id5;
+        write(cs.key + ": 開始（" + nm + "）");
+        var b5 = CK_FFXWriter.build({ name: nm, matchName: "Pseudo/" + nm, params: cs.params });
+        var s5 = comp.layers.addSolid([0.5, 0.5, 0.5], cs.key, 1920, 1080, 1);
+        applyFFX(s5, b5, "kind_" + cs.key);
+        var f5 = s5.property("ADBE Effect Parade").property(1);
+        write(cs.key + ": 適用 → " + (f5 ? f5.matchName : "付いていない"));
+        var op = s5.property("ADBE Transform Group").property("ADBE Opacity");
+        op.expression = "effect(\"" + nm + "\")(1).value;";
+        write(cs.key + ": エクスプレッションを設定");
+        write(cs.key + ": エクスプレッションの結果 → " + op.valueAtTime(0, false) + (op.expressionError ? "（" + op.expressionError + "）" : ""));
+      }
+      write("全部終わり");
+    } else if (mode === "4") {
       // CtrlKit の書き出し処理で、その場で疑似エフェクトを作る（毎回別の名前）
       var ckDir = File($.fileName).parent.parent.parent.fsName + "/ctrlkit/src/";
       $.evalFile(new File(ckDir + "binary.jsxinc"));
