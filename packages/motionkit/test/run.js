@@ -24,19 +24,19 @@ const jsx = fs.readFileSync(path.join(root, "motionkit.jsx"), "utf8");
 check("motionkit.jsx が構文として正しい", (() => { try { new Function(jsx.replace(/^#\w+.*$/gm, "")); return true; } catch (e) { return false; } })());
 check("専用のエンジンを指定している（浮きウィンドウで固まらないように）", /^#targetengine "MotionKit"$/m.test(jsx));
 
-// 3) 疑似エフェクトの定義
+// 3) 調整項目の一覧
 const defs = {};
-for (const key of ["shape", "anim", "layout"]) defs[key] = JSON.parse(fs.readFileSync(path.join(root, "effects", key + ".ck.json"), "utf8"));
+for (const key of ["shape", "anim", "layout"]) defs[key] = { name: key, params: JSON.parse(fs.readFileSync(path.join(root, "effects", key + ".json"), "utf8")) };
 const paramNames = (def) => def.params.map((p) => p.name);
+const TYPES = ["slider", "angle", "checkbox", "color", "popup"];
 for (const key in defs) {
   const d = defs[key];
-  check(`${d.name}: 項目名は31文字以内・ASCII`, d.params.every((p) => p.name.length <= 31 && /^[\x20-\x7e]+$/.test(p.name)));
-  check(`${d.name}: 元の名前は英数字と _ だけ`, /^[A-Za-z0-9_]+$/.test(d.name));
-  // AE 2025 でチェックボックス・角度の項目をエクスプレッションから読むと「Actual missing plugin」で落ちたため使わない
-  check(`${d.name}: チェックボックス・角度を使っていない`, d.params.every((p) => p.type !== "checkbox" && p.type !== "angle"));
+  check(`${key}: 項目名は ASCII`, d.params.every((p) => /^[\x20-\x7e]+$/.test(p.name)));
+  check(`${key}: 標準のエクスプレッション制御にある種類だけ`, d.params.every((p) => TYPES.includes(p.type)));
 }
+check("疑似エフェクト（.ffx）を使っていない", !/applyPreset|\.ffx/.test(jsx.replace(/^\s*\/\/.*$/gm, "")));
 
-// setParams({...}) で使っている項目名がエフェクトにあるか
+// setParams({...}) で使っている項目名が一覧にあるか
 const effectOfBlock = [
   [/createShape[\s\S]*?setParams\(fx, \{([\s\S]*?)\}\);/, "shape"],
   [/applyAnim[\s\S]*?setParams\(fx, \{([\s\S]*?)\}\);/, "anim"],
@@ -46,29 +46,37 @@ for (const [re, key] of effectOfBlock) {
   const body = re.exec(jsx)[1];
   const keys = [...body.matchAll(/^\s*(?:"([^"]+)"|(\w+)):/gm)].map((m) => m[1] || m[2]);
   const missing = keys.filter((k) => !paramNames(defs[key]).includes(k));
-  check(`${defs[key].name}: パネルが設定する項目がすべてある`, keys.length > 0 && missing.length === 0, missing.join(", "));
+  check(`${key}: パネルが設定する項目がすべてある`, keys.length > 0 && missing.length === 0, missing.join(", "));
 }
 
 // 4) エクスプレッションを擬似的な AE 環境で動かす
-const built = require(path.join(root, "tools", "build.js")).effectDefs();
-const ctx = { MK_EFFECT_NAME: { shape: built.shape.name, anim: built.anim.name, layout: built.layout.name } };
+const ctx = {};
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, "src", "expressions.jsxinc"), "utf8"), ctx);
 const E = ctx.MK_Expr;
-check("エクスプレッションが付けた名前のエフェクトを読む", E.SHAPE === built.shape.name && /^MK_Shape_[0-9a-f]{6}$/.test(E.SHAPE));
+const KEY_OF = { [E.SHAPE]: "shape", [E.ANIM]: "anim", [E.LAYOUT]: "layout" };
 
-function makeEffect(def, values) {
-  const names = paramNames(def);
-  const v = {};
-  def.params.forEach((p) => (v[p.name] = p.type === "checkbox" ? (p.value ? 1 : 0) : p.value));
-  Object.assign(v, values || {});
-  return (name) => {
-    if (!names.includes(name)) throw new Error("項目がありません: " + name);
-    return { value: v[name] };
+// 「Shape Width」のような名前のエクスプレッション制御を、値の表から作る
+function makeControl(prefix, values, fullName) {
+  const def = defs[KEY_OF[prefix]];
+  const name = fullName.substring(prefix.length + 1);
+  if (!paramNames(def).includes(name)) throw new Error("項目がありません: " + fullName);
+  const p = def.params.find((x) => x.name === name);
+  const init = p.type === "checkbox" ? (p.value ? 1 : 0) : p.type === "color" ? p.value.map((c) => c / 255).concat(1) : p.value;
+  const v = values && name in values ? values[name] : init;
+  return (index) => {
+    if (index !== 1) throw new Error("値は1番目のプロパティ");
+    return { value: v };
   };
 }
 
-// env: { value, time, inPoint, outPoint, effects: { "MK_Anim": {...} }, layers: { name: { anchor, layout: {...} } } }
+function lookup(groups, fullName) {
+  const prefix = fullName.split(" ")[0];
+  if (!groups || !groups[prefix]) throw new Error("エフェクトがありません: " + fullName);
+  return makeControl(prefix, groups[prefix], fullName);
+}
+
+// env: { value, time, inPoint, outPoint, effects: { Anim: {...} }, layers: { name: { anchor, layout: {...} } } }
 function evalExpr(code, env) {
   let rnd = 0;
   const sandbox = {
@@ -76,20 +84,13 @@ function evalExpr(code, env) {
     time: env.time || 0,
     inPoint: env.inPoint || 0,
     outPoint: env.outPoint === undefined ? 10 : env.outPoint,
-    effect(name) {
-      const key = { [E.SHAPE]: "shape", [E.ANIM]: "anim" }[name];
-      if (!env.effects || !env.effects[name]) throw new Error("エフェクトがありません: " + name);
-      return makeEffect(defs[key], env.effects[name]);
-    },
+    effect: (name) => lookup(env.effects, name),
     thisComp: {
       layer(name) {
         const l = (env.layers || {})[name];
         if (!l) throw new Error("レイヤーがありません: " + name);
         return {
-          effect: (n) => {
-            if (n !== E.LAYOUT) throw new Error("エフェクトがありません: " + n);
-            return makeEffect(defs.layout, l.layout);
-          },
+          effect: (n) => lookup({ [E.LAYOUT]: l.layout }, n),
           transform: { anchorPoint: { value: l.anchor || [50, 50] } },
         };
       },

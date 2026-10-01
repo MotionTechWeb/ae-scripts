@@ -7,11 +7,16 @@
  * 配置の情報は 1 行目の目印コメント（// @mk-layout ...）に残し、書き直すときに読み戻す。
  */
 var MK_Expr = (function () {
-  // エフェクト名は tools/build.js が中身から付ける（MK_Shape_xxxxxx）。MK_EFFECT_NAME が無ければ元の名前
-  var N = typeof MK_EFFECT_NAME !== "undefined" ? MK_EFFECT_NAME : { shape: "MK_Shape", anim: "MK_Anim", layout: "MK_Layout" };
-  var SHAPE = N.shape;
-  var ANIM = N.anim;
-  var LAYOUT = N.layout;
+  // 調整項目は AE 標準のエクスプレッション制御（スライダー制御など）を1項目ずつ付け、
+  // 「<頭の名前> <項目名>」という名前にする（例: Shape Width）。値はどれも 1 番目のプロパティ
+  var SHAPE = "Shape";
+  var ANIM = "Anim";
+  var LAYOUT = "Layout";
+
+  // 頭の名前と項目名から、エフェクトの名前を作る
+  function controlName(prefix, name) {
+    return prefix + " " + name;
+  }
 
   function q(s) {
     return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
@@ -25,7 +30,7 @@ var MK_Expr = (function () {
   // シェイプ（エフェクト「MK_Shape」の値を読むだけ）
   // ---------------------------------------------------------------------
   function fx(name) {
-    return "effect(" + q(SHAPE) + ")(" + q(name) + ").value";
+    return "effect(" + q(controlName(SHAPE, name)) + ")(1).value";
   }
 
   var shape = {
@@ -61,7 +66,8 @@ var MK_Expr = (function () {
   var ANIM_FN = lines([
     "function mkAnim() {",
     "  var fx;",
-    "  try { fx = effect(" + q(ANIM) + "); } catch (e) { return null; }",
+    "  try { effect(" + q(controlName(ANIM, "Type")) + "); } catch (e) { return null; }",
+    "  fx = function (n) { return effect(" + q(ANIM + " ") + " + n)(1); };",
     "  var k = fx(\"Overshoot\").value / 100 * 3;",
     "  var ez = fx(\"Easing\").value;",
     "  function f(t) {",
@@ -137,7 +143,7 @@ var MK_Expr = (function () {
   var LAYOUT_FN = lines([
     "function mkLayout(ctrl, i, n) {",
     "  var L = thisComp.layer(ctrl);",
-    "  var fx = L.effect(" + q(LAYOUT) + ");",
+    "  var fx = function (n) { return L.effect(" + q(LAYOUT + " ") + " + n)(1); };",
     "  var m = fx(\"Mode\").value;",
     "  var sx = fx(\"Spacing X\").value, sy = fx(\"Spacing Y\").value;",
     "  var x = 0, y = 0, r = 0;",
@@ -231,6 +237,7 @@ var MK_Expr = (function () {
   }
 
   return {
+    controlName: controlName,
     SHAPE: SHAPE,
     ANIM: ANIM,
     LAYOUT: LAYOUT,

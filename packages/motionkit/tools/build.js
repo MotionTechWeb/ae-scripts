@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 /*
  * motionkit.jsx の埋め込み部分（@MK_BUILD_START〜@MK_BUILD_END）を作り直す。
- * effects/*.ck.json から疑似エフェクトの .ffx を作って文字列にし、src/expressions.jsxinc と一緒に埋め込む。
+ * effects/*.json（調整項目の一覧）と src/expressions.jsxinc を埋め込む。
  *
  *   node packages/motionkit/tools/build.js          … motionkit.jsx を更新
  *   node packages/motionkit/tools/build.js --check  … motionkit.jsx が最新か確かめる（古ければ終了コード 1）
  */
 var fs = require("fs");
 var path = require("path");
-var crypto = require("crypto");
-var ck = require("../../ctrlkit/tools/build.js");
 
 var root = path.join(__dirname, "..");
 var EFFECTS = ["shape", "anim", "layout"];
@@ -29,39 +27,28 @@ function indent(code, pad) {
     .join("\n");
 }
 
-// 疑似エフェクトの定義を読み、名前の末尾に中身から作った短いハッシュを付ける。
-// AE は一度読み込んだ内部名の定義を覚えていて、同じ内部名を使い回すと
-// 「Actual missing plugin」で落ちることがあったため、中身が変われば名前も必ず変わるようにする
-function effectDefs() {
-  var defs = {};
+function params() {
+  var out = {};
   EFFECTS.forEach(function (key) {
-    var src = JSON.parse(read(path.join(root, "effects", key + ".ck.json")));
-    var hash = crypto.createHash("sha1").update(JSON.stringify(src.params)).digest("hex").substring(0, 6);
-    var name = src.name + "_" + hash;
-    defs[key] = { name: name, matchName: "Pseudo/" + name, params: src.params };
+    out[key] = JSON.parse(read(path.join(root, "effects", key + ".json")));
   });
-  return defs;
+  return out;
 }
 
 function block() {
+  var p = params();
   var out = [];
-  var defs = effectDefs();
   out.push("// 以下は tools/build.js が生成（直接編集しない）");
-  var names = [], matchNames = [], lits = [];
-  EFFECTS.forEach(function (key) {
-    var def = defs[key];
-    var built = ck.build(def);
-    var v = "MK_FFX_" + key.toUpperCase();
-    lits.push("// 疑似エフェクト「" + def.name + "」（effects/" + key + ".ck.json）\n" + ck.ctx.CK_Embed.toStringLiteral(built.bytes, v));
-    names.push("  " + key + ": " + JSON.stringify(def.name));
-    matchNames.push("  " + key + ": " + JSON.stringify(def.matchName));
-  });
-  out.push("var MK_EFFECT_NAME = {\n" + names.join(",\n") + "\n};");
-  out.push("var MK_MATCHNAME = {\n" + matchNames.join(",\n") + "\n};");
+  out.push("// 調整項目の一覧（effects/*.json）");
+  out.push(
+    "var MK_PARAMS = {\n" +
+      EFFECTS.map(function (key) {
+        return "  " + key + ": [\n" + p[key].map(function (x) { return "    " + JSON.stringify(x); }).join(",\n") + "\n  ]";
+      }).join(",\n") +
+      "\n};"
+  );
   out.push("// src/expressions.jsxinc");
   out.push(read(path.join(root, "src", "expressions.jsxinc")));
-  out.push(lits.join("\n"));
-  out.push("var MK_FFX = {\n" + EFFECTS.map(function (k) { return "  " + k + ": MK_FFX_" + k.toUpperCase(); }).join(",\n") + "\n};");
   return out.join("\n");
 }
 
@@ -73,7 +60,7 @@ function render(src) {
   return src.substring(0, a + START.length) + "\n" + indent(block(), pad) + "\n" + pad + src.substring(b);
 }
 
-module.exports = { render: render, effectDefs: effectDefs };
+module.exports = { render: render, params: params };
 
 if (require.main === module) {
   var file = path.join(root, "motionkit.jsx");

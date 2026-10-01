@@ -68,9 +68,9 @@ ae-scripts/
    │  └─ test/
    └─ motionkit/
       ├─ motionkit.jsx   # パネル本体（配布はこれ1つ）
-      ├─ effects/        # 疑似エフェクトの設定（.ck.json）
+      ├─ effects/        # 調整項目の一覧（.json）
       ├─ src/            # エクスプレッション
-      ├─ tools/build.js  # 疑似エフェクトとエクスプレッションを motionkit.jsx に埋め込む
+      ├─ tools/build.js  # 調整項目とエクスプレッションを motionkit.jsx に埋め込む
       └─ test/
 tools/
 └─ ctrlkit-web/

@@ -1,0 +1,14 @@
+[
+  {"type": "popup", "name": "Mode", "items": ["Grid", "Circle", "Line", "Scatter"], "value": 1},
+  {"type": "slider", "name": "Columns", "value": 3},
+  {"type": "slider", "name": "Spacing X", "value": 200},
+  {"type": "slider", "name": "Spacing Y", "value": 200},
+  {"type": "slider", "name": "Radius", "value": 300},
+  {"type": "angle", "name": "Start Angle", "value": -90},
+  {"type": "angle", "name": "Arc", "value": 360},
+  {"type": "checkbox", "name": "Align Rotation", "value": false},
+  {"type": "slider", "name": "Scatter Width", "value": 1200},
+  {"type": "slider", "name": "Scatter Height", "value": 600},
+  {"type": "slider", "name": "Random Rotation", "value": 0},
+  {"type": "slider", "name": "Seed", "value": 1}
+]
