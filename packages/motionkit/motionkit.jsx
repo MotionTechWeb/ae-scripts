@@ -1419,31 +1419,68 @@ effects/*.ck.json と src/expressions.jsxinc から生成する。直接編集�
     return d;
   }
 
-  // 色見本と「色...」ボタン。見本は背景色で塗るだけにする
-  // （ボタンを onDraw で描くと、AE によっては再描画が止まらず固まるため）
+  // 色の指定: よく使う色のドロップダウンと16進数の入力欄、色見本。
+  // $.colorPicker は AE（Windows）で呼んだあとに落ちることがあるため使わない。
+  // 色見本は onDraw で描かず、背景色を塗るだけにする（onDraw は再描画が止まらないことがある）
+  var PALETTE = [
+    { label: "白", hex: "FFFFFF" },
+    { label: "黒", hex: "000000" },
+    { label: "グレー", hex: "808080" },
+    { label: "赤", hex: "E53935" },
+    { label: "オレンジ", hex: "FB8C00" },
+    { label: "黄", hex: "FDD835" },
+    { label: "緑", hex: "43A047" },
+    { label: "水色", hex: "29B6F6" },
+    { label: "青", hex: "1E88E5" },
+    { label: "紫", hex: "8E24AA" },
+    { label: "ピンク", hex: "EC407A" }
+  ];
+
+  function hexToRgb(hex) {
+    var m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex).replace(/\s/g, ""));
+    if (!m) return null;
+    var n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function rgbToHex(c) {
+    var s = ((c[0] << 16) | (c[1] << 8) | c[2]).toString(16).toUpperCase();
+    while (s.length < 6) s = "0" + s;
+    return s;
+  }
+
   function swatch(parent, color) {
     var g = parent.add("group");
     g.spacing = 4;
     var chip = g.add("panel");
-    chip.preferredSize = [28, 18];
-    var b = g.add("button", undefined, "色...");
-    b.preferredSize.width = 44;
+    chip.preferredSize = [20, 18];
+    var labels = [];
+    for (var i = 0; i < PALETTE.length; i++) labels.push(PALETTE[i].label);
+    var list = g.add("dropdownlist", undefined, labels);
+    var hex = g.add("edittext", undefined, rgbToHex(color));
+    hex.characters = 7;
     var sw = { color: color };
     function paint() {
       var c = rgb01(sw.color);
       chip.graphics.backgroundColor = chip.graphics.newBrush(chip.graphics.BrushType.SOLID_COLOR, [c[0], c[1], c[2], 1]);
+    }
+    function set(c) {
+      sw.color = c;
+      hex.text = rgbToHex(c);
+      paint();
       // 背景色を変えただけでは塗り直されないので、一度隠して出し直す
       chip.hide();
       chip.show();
     }
-    paint();
-    b.onClick = function () {
-      var cur = (sw.color[0] << 16) | (sw.color[1] << 8) | sw.color[2];
-      var picked = $.colorPicker(cur);
-      if (picked < 0) return;
-      sw.color = [(picked >> 16) & 255, (picked >> 8) & 255, picked & 255];
-      paint();
+    list.onChange = function () {
+      if (list.selection) set(hexToRgb(PALETTE[list.selection.index].hex));
     };
+    hex.onChange = function () {
+      var c = hexToRgb(hex.text);
+      if (c) set(c);
+      else hex.text = rgbToHex(sw.color);
+    };
+    paint();
     return sw;
   }
 
