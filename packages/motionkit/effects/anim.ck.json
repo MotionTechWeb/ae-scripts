@@ -10,9 +10,9 @@
     { "type": "slider", "name": "Overshoot", "value": 50, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 500, "precision": 0 },
     { "type": "popup", "name": "Direction", "items": ["From Left", "From Right", "From Top", "From Bottom"], "value": 4, "hold": true },
     { "type": "slider", "name": "Distance", "value": 200, "sliderMin": 0, "sliderMax": 2000, "validMin": -10000, "validMax": 10000, "precision": 0 },
-    { "type": "angle", "name": "Rotation", "value": -90 },
-    { "type": "checkbox", "name": "Fade", "value": true, "label": "On", "hold": true },
-    { "type": "checkbox", "name": "Out", "value": false, "label": "On", "hold": true },
+    { "type": "slider", "name": "Rotation", "value": -90, "sliderMin": -360, "sliderMax": 360, "validMin": -36000, "validMax": 36000, "precision": 1 },
+    { "type": "slider", "name": "Fade", "value": 1, "sliderMin": 0, "sliderMax": 1, "validMin": 0, "validMax": 1, "precision": 0 },
+    { "type": "slider", "name": "Out", "value": 0, "sliderMin": 0, "sliderMax": 1, "validMin": 0, "validMax": 1, "precision": 0 },
     { "type": "slider", "name": "Out Duration", "value": 0.5, "sliderMin": 0, "sliderMax": 5, "validMin": 0, "validMax": 3600, "precision": 2 }
   ]
 }

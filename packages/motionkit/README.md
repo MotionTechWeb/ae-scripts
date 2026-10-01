@@ -24,6 +24,9 @@
 | 矢印 | Width（長さ）, Head Size |
 | リング | Width, Height（線だけの楕円） |
 
+オン／オフの項目（Fill, Stroke, Fade, Out, Align Rotation）は 1 でオン、0 でオフのスライダーです。角度も度の数値のスライダーです
+（AE 2025 でチェックボックスや角度の項目をエクスプレッションから読むと落ちたため）。
+
 どの形にも共通で Fill / Fill Color、Stroke / Stroke Color / Stroke Width、Trim Start / Trim End / Trim Offset が付きます。
 Trim End にキーフレームを打てば、線を描いていくアニメーションになります。
 

@@ -32,6 +32,8 @@ for (const key in defs) {
   const d = defs[key];
   check(`${d.name}: 項目名は31文字以内・ASCII`, d.params.every((p) => p.name.length <= 31 && /^[\x20-\x7e]+$/.test(p.name)));
   check(`${d.name}: 元の名前は英数字と _ だけ`, /^[A-Za-z0-9_]+$/.test(d.name));
+  // AE 2025 でチェックボックス・角度の項目をエクスプレッションから読むと「Actual missing plugin」で落ちたため使わない
+  check(`${d.name}: チェックボックス・角度を使っていない`, d.params.every((p) => p.type !== "checkbox" && p.type !== "angle"));
 }
 
 // setParams({...}) で使っている項目名がエフェクトにあるか
