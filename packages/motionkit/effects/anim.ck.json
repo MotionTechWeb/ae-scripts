@@ -2,17 +2,17 @@
   "name": "MK_Anim",
   "matchName": "Pseudo/MK_Anim",
   "params": [
-    { "type": "popup", "name": "Type", "items": ["Pop", "Fade", "Slide", "Rotate", "Wipe"], "value": 1 },
+    { "type": "popup", "name": "Type", "items": ["Pop", "Fade", "Slide", "Rotate", "Wipe"], "value": 1, "hold": true },
     { "type": "slider", "name": "Start", "value": 0, "sliderMin": 0, "sliderMax": 10, "validMin": -3600, "validMax": 3600, "precision": 2 },
     { "type": "slider", "name": "Delay", "value": 0, "sliderMin": 0, "sliderMax": 5, "validMin": -3600, "validMax": 3600, "precision": 2 },
     { "type": "slider", "name": "Duration", "value": 0.5, "sliderMin": 0, "sliderMax": 5, "validMin": 0, "validMax": 3600, "precision": 2 },
-    { "type": "popup", "name": "Easing", "items": ["Ease Out", "Ease In-Out", "Overshoot", "Elastic", "Bounce", "Linear"], "value": 3 },
+    { "type": "popup", "name": "Easing", "items": ["Ease Out", "Ease In-Out", "Overshoot", "Elastic", "Bounce", "Linear"], "value": 3, "hold": true },
     { "type": "slider", "name": "Overshoot", "value": 50, "sliderMin": 0, "sliderMax": 100, "validMin": 0, "validMax": 500, "precision": 0 },
-    { "type": "popup", "name": "Direction", "items": ["From Left", "From Right", "From Top", "From Bottom"], "value": 4 },
+    { "type": "popup", "name": "Direction", "items": ["From Left", "From Right", "From Top", "From Bottom"], "value": 4, "hold": true },
     { "type": "slider", "name": "Distance", "value": 200, "sliderMin": 0, "sliderMax": 2000, "validMin": -10000, "validMax": 10000, "precision": 0 },
     { "type": "angle", "name": "Rotation", "value": -90 },
-    { "type": "checkbox", "name": "Fade", "value": true, "label": "On" },
-    { "type": "checkbox", "name": "Out", "value": false, "label": "On" },
+    { "type": "checkbox", "name": "Fade", "value": true, "label": "On", "hold": true },
+    { "type": "checkbox", "name": "Out", "value": false, "label": "On", "hold": true },
     { "type": "slider", "name": "Out Duration", "value": 0.5, "sliderMin": 0, "sliderMax": 5, "validMin": 0, "validMax": 3600, "precision": 2 }
   ]
 }

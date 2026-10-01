@@ -20,7 +20,9 @@ check("motionkit.jsx の埋め込み部分が最新", chk.status === 0, chk.stde
 
 // 2) motionkit.jsx が構文として正しい
 const jsx = fs.readFileSync(path.join(root, "motionkit.jsx"), "utf8");
-check("motionkit.jsx が構文として正しい", (() => { try { new Function(jsx); return true; } catch (e) { return false; } })());
+// #targetengine などの ExtendScript の指示行は JavaScript ではないので外して確かめる
+check("motionkit.jsx が構文として正しい", (() => { try { new Function(jsx.replace(/^#\w+.*$/gm, "")); return true; } catch (e) { return false; } })());
+check("専用のエンジンを指定している（浮きウィンドウで固まらないように）", /^#targetengine "MotionKit"$/m.test(jsx));
 
 // 3) 疑似エフェクトの定義
 const defs = {};
@@ -29,7 +31,7 @@ const paramNames = (def) => def.params.map((p) => p.name);
 for (const key in defs) {
   const d = defs[key];
   check(`${d.name}: 項目名は31文字以内・ASCII`, d.params.every((p) => p.name.length <= 31 && /^[\x20-\x7e]+$/.test(p.name)));
-  check(`${d.name}: 内部名は Pseudo/ + 名前（食い違うと AE がエフェクトを見失う）`, d.matchName === "Pseudo/" + d.name && /^[A-Za-z0-9_]+$/.test(d.name) && d.matchName.length <= 31);
+  check(`${d.name}: 元の名前は英数字と _ だけ`, /^[A-Za-z0-9_]+$/.test(d.name));
 }
 
 // setParams({...}) で使っている項目名がエフェクトにあるか
@@ -46,10 +48,12 @@ for (const [re, key] of effectOfBlock) {
 }
 
 // 4) エクスプレッションを擬似的な AE 環境で動かす
-const ctx = {};
+const built = require(path.join(root, "tools", "build.js")).effectDefs();
+const ctx = { MK_EFFECT_NAME: { shape: built.shape.name, anim: built.anim.name, layout: built.layout.name } };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(root, "src", "expressions.jsxinc"), "utf8"), ctx);
 const E = ctx.MK_Expr;
+check("エクスプレッションが付けた名前のエフェクトを読む", E.SHAPE === built.shape.name && /^MK_Shape_[0-9a-f]{6}$/.test(E.SHAPE));
 
 function makeEffect(def, values) {
   const names = paramNames(def);
@@ -71,7 +75,7 @@ function evalExpr(code, env) {
     inPoint: env.inPoint || 0,
     outPoint: env.outPoint === undefined ? 10 : env.outPoint,
     effect(name) {
-      const key = { "MK_Shape": "shape", "MK_Anim": "anim" }[name];
+      const key = { [E.SHAPE]: "shape", [E.ANIM]: "anim" }[name];
       if (!env.effects || !env.effects[name]) throw new Error("エフェクトがありません: " + name);
       return makeEffect(defs[key], env.effects[name]);
     },
@@ -81,7 +85,7 @@ function evalExpr(code, env) {
         if (!l) throw new Error("レイヤーがありません: " + name);
         return {
           effect: (n) => {
-            if (n !== "MK_Layout") throw new Error("エフェクトがありません: " + n);
+            if (n !== E.LAYOUT) throw new Error("エフェクトがありません: " + n);
             return makeEffect(defs.layout, l.layout);
           },
           transform: { anchorPoint: { value: l.anchor || [50, 50] } },
@@ -96,7 +100,7 @@ function evalExpr(code, env) {
 }
 
 // シェイプ
-const shapeEnv = (vals) => ({ effects: { "MK_Shape": vals || {} } });
+const shapeEnv = (vals) => ({ effects: { [E.SHAPE]: vals || {} } });
 check("シェイプ: サイズ", nearV(evalExpr(E.shape.size, shapeEnv({ Width: 300, Height: 120 })), [300, 120]));
 check("シェイプ: 星の内側の半径", near(evalExpr(E.shape.innerRadius, shapeEnv({ Width: 400, "Inner Radius": 25 })), 50));
 check("シェイプ: 塗りのオン／オフ", evalExpr(E.shape.fillOpacity, shapeEnv({ Fill: 0 })) === 0 && evalExpr(E.shape.fillOpacity, shapeEnv({ Fill: 1 })) === 100);
@@ -109,7 +113,7 @@ for (const k in E.shape) {
 }
 
 // アニメ
-const anim = (vals, extra) => Object.assign({ effects: { "MK_Anim": vals } }, extra);
+const anim = (vals, extra) => Object.assign({ effects: { [E.ANIM]: vals } }, extra);
 check("アニメ: エフェクトが無ければ元の値", nearV(evalExpr(E.animScale(), { value: [100, 100], time: 0 }), [100, 100]));
 check("アニメ: ポップの開始は0", nearV(evalExpr(E.animScale(), anim({ Type: 1 }, { value: [100, 100], time: 0 })), [0, 0]));
 check("アニメ: ポップの終わりは元の値", nearV(evalExpr(E.animScale(), anim({ Type: 1 }, { value: [100, 80], time: 0.5 })), [100, 80]));
@@ -150,7 +154,7 @@ check("配置: 円の範囲が360未満なら両端まで", nearV(evalExpr(E.pos
 check("配置: 直線", nearV(evalExpr(E.position(info(0, 3)), lay({ Mode: 3, "Spacing X": 100, "Spacing Y": 0 }, { value: [0, 0] })), [-50, 50]));
 check("配置: ランダム", nearV(evalExpr(E.position(info(0, 3)), lay({ Mode: 4, "Scatter Width": 1000, "Scatter Height": 100 }, { value: [0, 0] })), [-200, 25]));
 check("配置: 3Dレイヤーは Z を残す", nearV(evalExpr(E.position(info(0, 1)), lay({ Mode: 3 }, { value: [0, 0, -300] })), [50, 50, -300]));
-const both = evalExpr(E.position(info(0, 1)), Object.assign(lay({ Mode: 3 }, { value: [0, 0], time: 0 }), { effects: { "MK_Anim": { Type: 3 } } }));
+const both = evalExpr(E.position(info(0, 1)), Object.assign(lay({ Mode: 3 }, { value: [0, 0], time: 0 }), { effects: { [E.ANIM]: { Type: 3 } } }));
 check("配置＋スライド", nearV(both, [50, 250]), both);
 const back = E.parseLayout(E.position(info(3, 7, 'My "Grid" 2')));
 check("配置の目印を読み戻せる", back.i === 3 && back.n === 7 && back.ctrl === 'My "Grid" 2', JSON.stringify(back));

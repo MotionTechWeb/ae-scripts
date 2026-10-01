@@ -15,6 +15,8 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
      毎回別の名前の疑似エフェクトを平面に付け、エクスプレッションから読ませる。落ちた直前の行が原因の種類
   6: 3 と同じ手順を、毎回別の名前の MK_Shape（中身は同じ）で行う。
      3 で落ちて 6 で落ちなければ、AE が「MK_Shape」という名前の古い定義を覚えているのが原因
+  7: チェックボックス・ドロップダウン・角度の値をエクスプレッションから読む
+     停止キーフレームあり（AE の見本と同じ形）→ 角度 → 停止キーフレームなし の順。落ちた直前の行が原因
 */
 (function () {
   var log = new File(Folder.desktop.fsName + "/motionkit_diag.txt");
@@ -36,7 +38,7 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
     var a = src.indexOf("// ---- @MK_BUILD_START ----");
     var b = src.indexOf("// ---- @MK_BUILD_END ----");
     if (a < 0 || b < a) throw new Error("motionkit.jsx の埋め込み部分が見つかりません");
-    var code = src.substring(a, b) + "\n({ E: MK_Expr, FFX: MK_FFX, MATCH: MK_MATCHNAME });";
+    var code = src.substring(a, b) + "\n({ E: MK_Expr, FFX: MK_FFX, MATCH: MK_MATCHNAME, NAME: MK_EFFECT_NAME });";
     return eval(code);
   }
 
@@ -56,7 +58,7 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
   }
 
   var mode = prompt(
-    "どの確認をしますか？\n1: 疑似エフェクトを平面に付けるだけ\n2: シェイプを作るだけ\n3: MotionKit と同じ手順で長方形を作る\n4: 名前と内部名の関係を調べる\n5: どの種類の項目で見失うかを調べる\n6: 3 を毎回別の名前のエフェクトで行う",
+    "どの確認をしますか？\n1: 疑似エフェクトを平面に付けるだけ\n2: シェイプを作るだけ\n3: MotionKit と同じ手順で長方形を作る\n4: 名前と内部名の関係を調べる\n5: どの種類の項目で見失うかを調べる\n6: 3 を毎回別の名前のエフェクトで行う\n7: チェックボックスなどの値を読む",
     "1",
     "MotionKit 確認"
   );
@@ -71,7 +73,32 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
     comp.openInViewer();
     write("コンポジション作成");
 
-    if (mode === "5") {
+    if (mode === "7") {
+      var ckDir7 = File($.fileName).parent.parent.parent.fsName + "/ctrlkit/src/";
+      $.evalFile(new File(ckDir7 + "binary.jsxinc"));
+      $.evalFile(new File(ckDir7 + "ffx-writer.jsxinc"));
+      var sl7 = { type: "slider", name: "Amount", value: 50, sliderMin: 0, sliderMax: 100, validMin: 0, validMax: 100, precision: 0 };
+      var cases7 = [
+        { key: "cbHold", p: { type: "checkbox", name: "Flag", value: true, label: "On", hold: true } },
+        { key: "popHold", p: { type: "popup", name: "Pick", items: ["A", "B", "C"], value: 2, hold: true } },
+        { key: "angle", p: { type: "angle", name: "Turn", value: 30 } },
+        { key: "cbNoHold", p: { type: "checkbox", name: "Flag", value: true, label: "On" } },
+        { key: "popNoHold", p: { type: "popup", name: "Pick", items: ["A", "B", "C"], value: 2 } }
+      ];
+      var id7 = new Date().getTime().toString(36);
+      for (var c7 = 0; c7 < cases7.length; c7++) {
+        var k7 = cases7[c7];
+        var nm7 = "Dg_" + k7.key + "_" + id7;
+        write(k7.key + ": 開始（" + nm7 + "）");
+        var s7 = comp.layers.addSolid([0.5, 0.5, 0.5], k7.key, 1920, 1080, 1);
+        applyFFX(s7, CK_FFXWriter.build({ name: nm7, matchName: "Pseudo/" + nm7, params: [sl7, k7.p] }), "read_" + k7.key);
+        write(k7.key + ": 適用");
+        var op7 = s7.property("ADBE Transform Group").property("ADBE Opacity");
+        op7.expression = "effect(\"" + nm7 + "\")(\"" + k7.p.name + "\").value * 10;";
+        write(k7.key + ": エクスプレッションの結果 → " + op7.valueAtTime(0, false) + (op7.expressionError ? "（" + op7.expressionError + "）" : ""));
+      }
+      write("全部終わり");
+    } else if (mode === "5") {
       var ckDir5 = File($.fileName).parent.parent.parent.fsName + "/ctrlkit/src/";
       $.evalFile(new File(ckDir5 + "binary.jsxinc"));
       $.evalFile(new File(ckDir5 + "ffx-writer.jsxinc"));
@@ -151,7 +178,7 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
       var layer = comp.layers.addShape();
       write("シェイプレイヤー作成");
       var useFx = mode === "3" || mode === "6";
-      var fxName = "MK_Shape";
+      var fxName = M.E.SHAPE;
       var shapeBytes = M.FFX.shape;
       if (mode === "6") {
         var ckDir6 = File($.fileName).parent.parent.parent.fsName + "/ctrlkit/src/";
@@ -166,7 +193,7 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
         shapeBytes = CK_FFXWriter.build({ name: fxName, matchName: "Pseudo/" + fxName, params: def6.params });
       }
       function ex(e) {
-        return e.split("MK_Shape").join(fxName);
+        return e.split(M.E.SHAPE).join(fxName);
       }
       if (useFx) {
         applyFFX(layer, shapeBytes, "shape_" + mode);
@@ -188,7 +215,8 @@ motionkit_diag.txt に1行ずつ書き出す。AE が固まったら、このフ
       var fill = contents().addProperty("ADBE Vector Graphic - Fill");
       if (useFx) fill.property("ADBE Vector Fill Color").expression = ex(M.E.shape.fillColor);
       write("塗りを追加");
-      var size = rect.property("ADBE Vector Rect Size");
+      // プロパティを足したあとは前の参照が無効になるので取り直す
+      var size = contents().property(1).property("ADBE Vector Rect Size");
       write("エクスプレッションの結果 → サイズ " + size.valueAtTime(0, false) + (size.expressionError ? "（" + size.expressionError + "）" : ""));
     }
     write("スクリプト終了（このあと固まったら、画面の描き直しで止まっている）");

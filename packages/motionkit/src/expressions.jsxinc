@@ -7,9 +7,11 @@
  * 配置の情報は 1 行目の目印コメント（// @mk-layout ...）に残し、書き直すときに読み戻す。
  */
 var MK_Expr = (function () {
-  var SHAPE = "MK_Shape";
-  var ANIM = "MK_Anim";
-  var LAYOUT = "MK_Layout";
+  // エフェクト名は tools/build.js が中身から付ける（MK_Shape_xxxxxx）。MK_EFFECT_NAME が無ければ元の名前
+  var N = typeof MK_EFFECT_NAME !== "undefined" ? MK_EFFECT_NAME : { shape: "MK_Shape", anim: "MK_Anim", layout: "MK_Layout" };
+  var SHAPE = N.shape;
+  var ANIM = N.anim;
+  var LAYOUT = N.layout;
 
   function q(s) {
     return '"' + String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
