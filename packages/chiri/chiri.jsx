@@ -13,6 +13,8 @@ date:2026/10/12
 
 - 黒抜きは標準エフェクト「チャンネルシフト」でアルファを赤チャンネルから取って行います（白黒なので Unmult と同じ結果）
 - ランダムシードはキーフレームではなくエクスプレッションで、指定したコマ数ごとに切り替えます
+- 作成後は、プリコンポーズしたレイヤー（オフのときは「Chiri コントロール」ヌル）のエフェクトコントロールで
+  しきい値・大きさ・コントラスト・明るさ・複雑度・明滅・色をまとめて調整できます
 - ScriptUI Panels フォルダに置くとドッキングパネルとして使えます
 */
 
@@ -45,8 +47,7 @@ date:2026/10/12
   }
 
   function setProp(effect, matchName, names, value) {
-    var p = findProp(effect, matchName, names);
-    if (!p) throw new Error("「" + effect.name + "」の「" + names[names.length - 1] + "」が見つかりません");
+    var p = findOrThrow(effect, matchName, names);
     p.setValue(value);
     return p;
   }
@@ -59,40 +60,82 @@ date:2026/10/12
 
   // ---- 本体 ----
 
+  // まとめて操作するためのコントロール（エフェクト名 → スライダーの値の元になる設定キー）
+  var CONTROLS = [
+    { name: "しきい値", key: "level" },
+    { name: "大きさ", key: "scale" },
+    { name: "コントラスト", key: "contrast" },
+    { name: "明るさ", key: "brightness" },
+    { name: "複雑度", key: "complexity" },
+    { name: "明滅（回/秒）", key: "rate" }
+  ];
+  var COLOR_CONTROL = "色";
+  var NULL_NAME = TITLE + " コントロール";
+  var DEPTH_SCALE = 0.6; // 2 層目以降は粒を 0.6 倍ずつ小さくする
+  var DEPTH_LEVEL = 10;  // 2 層目以降はしきい値を 10 ずつ上げて粒を少なめにする
+
+  function quote(str) {
+    return '"' + String(str).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  }
+
+  function uniqueCompName(base) {
+    var used = {};
+    for (var i = 1; i <= app.project.numItems; i++) used[app.project.item(i).name] = true;
+    if (!used[base]) return base;
+    for (var n = 2; ; n++) if (!used[base + " " + n]) return base + " " + n;
+  }
+
+  function addControls(layer, s) {
+    var parade = layer.property("ADBE Effect Parade");
+    for (var i = 0; i < CONTROLS.length; i++) {
+      var fx = parade.addProperty("ADBE Slider Control");
+      fx.name = CONTROLS[i].name;
+      fx.property(1).setValue(s[CONTROLS[i].key]);
+    }
+    var col = parade.addProperty("ADBE Color Control");
+    col.name = COLOR_CONTROL;
+    col.property(1).setValue(s.color);
+  }
+
   function buildLayer(comp, s, index) {
     var name = TITLE + " " + (index + 1);
     var solid = comp.layers.addSolid([0, 0, 0], name, comp.width, comp.height, comp.pixelAspect, comp.duration);
-
-    // 2 層目以降は粒を小さく・少し少なめにして奥行きを出す
-    var scale = s.scale * Math.pow(0.6, index);
-    var level = Math.min(255, s.level + index * 10);
-
-    var noise = addEffect(solid, "ADBE Fractal Noise");
-    setProp(noise, "ADBE Fractal Noise-0004", ["Contrast", "コントラスト"], s.contrast);
-    setProp(noise, "ADBE Fractal Noise-0005", ["Brightness", "明るさ"], s.brightness);
-    setProp(noise, "ADBE Fractal Noise-0010", ["Scale", "スケール"], scale);
-    setProp(noise, "ADBE Fractal Noise-0015", ["Complexity", "複雑度"], s.complexity);
-    var seed = findProp(noise, "ADBE Fractal Noise-0026", ["Random Seed", "ランダムシード"]);
-    if (!seed) throw new Error("フラクタルノイズの「ランダムシード」が見つかりません");
-    seed.expression =
-      "// " + TITLE + ": 1 秒に rate 回シードを切り替えて粒を明滅させる\n" +
-      "var rate = " + s.rate + ";\n" +
-      "posterizeTime(rate);\n" +
-      "Math.floor(time * rate) + " + (index * 1000) + ";";
-
-    var th = addEffect(solid, "ADBE Threshold2");
-    setProp(th, "ADBE Threshold2-0001", ["Level", "レベル"], level);
-
+    addEffect(solid, "ADBE Fractal Noise");
+    addEffect(solid, "ADBE Threshold2");
     // 白黒なので赤チャンネルをそのままアルファにすれば黒が抜ける（Unmult と同じ結果）
     var shift = addEffect(solid, "ADBE Shift Channels");
     setProp(shift, "ADBE Shift Channels-0001", ["Take Alpha From", "アルファを取り込むチャンネル"], 2);
-
-    var c = s.color;
-    if (!(c[0] === 1 && c[1] === 1 && c[2] === 1)) {
-      var fill = addEffect(solid, "ADBE Fill");
-      setProp(fill, "ADBE Fill-0002", ["Color", "カラー"], c);
-    }
+    addEffect(solid, "ADBE Fill");
     return solid;
+  }
+
+  // 各層のエフェクトを、コントロールを持つレイヤー（ref はそのレイヤーを指す式）にリンクする
+  function linkLayer(solid, index, ref) {
+    var fx = solid.property("ADBE Effect Parade");
+    var noise = fx.property("ADBE Fractal Noise");
+    var th = fx.property("ADBE Threshold2");
+    var fill = fx.property("ADBE Fill");
+    function c(name) { return ref + ".effect(" + quote(name) + ")(1)"; }
+
+    findOrThrow(noise, "ADBE Fractal Noise-0004", ["Contrast", "コントラスト"]).expression = c("コントラスト");
+    findOrThrow(noise, "ADBE Fractal Noise-0005", ["Brightness", "明るさ"]).expression = c("明るさ");
+    findOrThrow(noise, "ADBE Fractal Noise-0015", ["Complexity", "複雑度"]).expression = c("複雑度");
+    findOrThrow(noise, "ADBE Fractal Noise-0010", ["Scale", "スケール"]).expression =
+      c("大きさ") + " * " + Math.pow(DEPTH_SCALE, index) + ";";
+    findOrThrow(noise, "ADBE Fractal Noise-0026", ["Random Seed", "ランダムシード"]).expression =
+      "// 1 秒に rate 回シードを切り替えて粒を明滅させる\n" +
+      "var rate = Math.max(1, " + c("明滅（回/秒）") + ");\n" +
+      "posterizeTime(rate);\n" +
+      "Math.floor(time * rate) + " + (index * 1000) + ";";
+    findOrThrow(th, "ADBE Threshold2-0001", ["Level", "レベル"]).expression =
+      "Math.min(255, " + c("しきい値") + " + " + (index * DEPTH_LEVEL) + ");";
+    findOrThrow(fill, "ADBE Fill-0002", ["Color", "カラー"]).expression = c(COLOR_CONTROL);
+  }
+
+  function findOrThrow(effect, matchName, names) {
+    var p = findProp(effect, matchName, names);
+    if (!p) throw new Error("「" + effect.name + "」の「" + names[names.length - 1] + "」が見つかりません");
+    return p;
   }
 
   function run(s) {
@@ -106,17 +149,35 @@ date:2026/10/12
       var layers = [];
       for (var i = 0; i < s.layers; i++) layers.push(buildLayer(comp, s, i));
 
+      var host, ref, inner;
       if (s.precompose) {
         var indices = [];
         for (var j = 0; j < layers.length; j++) indices.push(layers[j].index);
         indices.sort(function (a, b) { return a - b; });
-        var pre = comp.layers.precompose(indices, TITLE, true);
-        comp.layer(indices[0]).name = TITLE;
-        comp.layer(indices[0]).selected = true;
+        var preName = uniqueCompName(TITLE);
+        var pre = comp.layers.precompose(indices, preName, true);
         pre.comment = TITLE + " で作成";
+        host = comp.layer(indices[0]);
+        host.name = preName;
+        // プリコンポーズの中から、外側のコンポにあるこのレイヤーのコントロールを読む
+        ref = "comp(" + quote(comp.name) + ").layer(" + quote(preName) + ")";
+        inner = [];
+        for (var k = 1; k <= pre.numLayers; k++) inner.push(pre.layer(k));
       } else {
-        for (var k = 0; k < layers.length; k++) layers[k].selected = true;
+        host = comp.layers.addNull(comp.duration);
+        host.name = NULL_NAME;
+        ref = "thisComp.layer(" + quote(NULL_NAME) + ")";
+        inner = layers;
       }
+      addControls(host, s);
+
+      // 層の番号は名前（Chiri 1, Chiri 2, ...）から取る
+      for (var m = 0; m < inner.length; m++) {
+        var idx = parseInt(inner[m].name.replace(/^.*\s/, ""), 10) - 1;
+        linkLayer(inner[m], isNaN(idx) ? m : idx, ref);
+      }
+      for (var q = 1; q <= comp.numLayers; q++) comp.layer(q).selected = false;
+      host.selected = true;
     } catch (e) {
       alert("作成に失敗しました。\n" + e.message, TITLE);
     } finally {
