@@ -10,6 +10,7 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
 | Zabuton | `packages/zabuton/` | テキストの背景に、文字サイズにぴったり合う「座布団」（角丸の長方形シェイプ）を自動で敷く |
 | CtrlKit | `packages/ctrlkit/` | AE上で疑似エフェクトを組み立て、`.ffx` とスクリプト埋め込み用コードを書き出すパネル（[詳細](packages/ctrlkit/README.md)） |
 | CtrlKit Web | `tools/ctrlkit-web/` | CtrlKit と同じことをブラウザでできる版。[ブラウザで開く](https://motiontechweb.github.io/ae-scripts/tools/ctrlkit-web/ctrlkit.html)だけで使える（[詳細](tools/ctrlkit-web/README.md)） |
+| Chiri | `packages/chiri/` | フラクタルノイズ＋しきい値で、チリ・ホコリのような粒が明滅する素材をワンボタンで作るパネル |
 
 ### Zabuton（座布団スクリプト）
 
@@ -48,6 +49,24 @@ Adobe After Effects 用の自作スクリプト（ExtendScript / `.jsx`）をま
    （After Effects の `Scripts` フォルダに置けば「ファイル > スクリプト」メニューから直接実行できます）
 4. 追加されたテキストレイヤーの文字を書き換え、シェイプレイヤーのエフェクトコントロールで余白・角丸・色を調整する
 
+### Chiri（チリ素材パネル）
+
+平面レイヤーにフラクタルノイズ・しきい値・チャンネルシフトを重ねて、黒抜き済みの「粒が明滅する素材」を作ります。
+
+#### 実行すると起きること
+
+1. アクティブなコンポジションに黒平面を「重ねる層の数」だけ追加する（2 層目以降は粒を小さく・少なめにして奥行きを出す）
+2. 各平面にフラクタルノイズを適用し、コントラスト・明るさ・複雑度・スケールを設定する
+3. ランダムシードにエクスプレッション（`posterizeTime`）を入れ、「明滅（回/秒）」ごとに粒のパターンを切り替える
+4. しきい値で白黒にし、チャンネルシフトでアルファを赤チャンネルから取って黒を抜く（Unmult 不要）
+5. 色を白以外にした場合は塗りで着色し、最後にまとめてプリコンポーズする（オフにもできる）
+
+#### 使い方
+
+1. `chiri.jsx` を After Effects の `ScriptUI Panels` フォルダに置き、「ウィンドウ」メニューから開く（「ファイル > スクリプト > スクリプトファイルを実行...」でも可）
+2. コンポジションを開いて値を決め、「作成」を押す
+3. 細かい調整は、できた平面のエフェクトコントロール（しきい値のレベル、フラクタルノイズの各値）で行う
+
 ## ディレクトリ構成
 
 ### 現在
@@ -61,10 +80,12 @@ ae-scripts/
    │  ├─ zabuton.jsx
    │  ├─ zabuton.ck.json
    │  └─ effectControl_zabuton.ffx
-   └─ ctrlkit/
-      ├─ ctrlkit.jsx
-      ├─ src/
-      └─ test/
+   ├─ ctrlkit/
+   │  ├─ ctrlkit.jsx
+   │  ├─ src/
+   │  └─ test/
+   └─ chiri/
+      └─ chiri.jsx
 tools/
 └─ ctrlkit-web/
    ├─ ctrlkit.html     # ブラウザで開く完成品（build.js が生成）
